@@ -32,6 +32,7 @@ import * as Gbi from "../include/gbi"
 import { dl_waterbox_rgba16_begin, dl_waterbox_end, dl_draw_quad_verts_0123, texture_waterbox_water, texture_waterbox_lava, texture_waterbox_jrb_water, texture_waterbox_unknown_water, texture_waterbox_mist, dl_waterbox_ia16_begin } from "../bin/segment2"
 import { ROTATE_CLOCKWISE, TEXTURE_MIST, TEXTURE_WATER, TEXTURE_JRB_WATER, TEX_QUICKSAND_SSL, TEX_PYRAMID_SAND_SSL, TEXTURE_LAVA } from "../include/moving_texture_macros"
 import { make_vertex } from "./GeoMisc"
+import { gPaintingMarioYEntry } from "./Paintings"
 
 // Vertex colors for rectangles. Used to give mist a tint
 const MOVTEX_VTX_COLOR_DEFAULT = 0 // no tint (white vertex colors)
@@ -180,6 +181,7 @@ let gMovetexLastTextureId = 0
 let gMovtexCounter = 1
 let gMovtexCounterPrev = 0
 
+let gWdwWaterLevelSet = false;
 
 const get_quad_collection_from_id = (id) => {
     switch (id) {
@@ -253,6 +255,34 @@ const movtex_change_texture_format = (quadCollectionId, gfx) => {
             Gbi.gSPDisplayList(gfx, dl_waterbox_rgba16_begin)
             break
     }
+}
+
+/**
+ * Sets the initial water level in Wet-Dry World based on how high Mario
+ * jumped into the painting.
+ */
+export const geo_wdw_set_initial_water_level = (callContext, node, mtx) => {
+    let wdwWaterHeight;
+
+    // Why was this global variable needed when they could just check for GEO_CONTEXT_AREA_LOAD?
+    if (callContext != GEO_CONTEXT_RENDER) {
+        gWdwWaterLevelSet = false;
+    } else if (callContext == GEO_CONTEXT_RENDER && gLinker.ObjectListProcessor.gEnvironmentRegions != null && !gWdwWaterLevelSet) {
+        if (gPaintingMarioYEntry <= 1382.4) {
+            wdwWaterHeight = 31;
+        } else if (gPaintingMarioYEntry >= 1600.0) {
+            wdwWaterHeight = 2816;
+        } else {
+            wdwWaterHeight = 1024;
+        }
+
+        for (let i = 0; i < gLinker.ObjectListProcessor.gEnvironmentRegions[0]; i++) {
+            gLinker.ObjectListProcessor.gEnvironmentRegions[i * 6 + 6] = wdwWaterHeight;
+        }
+        gWdwWaterLevelSet = true;
+    }
+
+    return null;
 }
 
 
@@ -383,10 +413,10 @@ export const geo_movtex_draw_water_regions = (callContext, node) => {
 
     if (callContext == GEO_CONTEXT_RENDER) {
         gMovtexVtxColor = MOVTEX_VTX_COLOR_DEFAULT
-        if (!ObjectListProc.gEnvironmentRegions) {
+        if (!gLinker.ObjectListProcessor.gEnvironmentRegions) {
             return gfx
         }
-        const numWaterBoxes = ObjectListProc.gEnvironmentRegions[0]
+        const numWaterBoxes = gLinker.ObjectListProcessor.gEnvironmentRegions[0]
 
         if (node.parameter == JRB_MOVTEX_INITIAL_MIST) {
             if (Camera.gLakituState.goalPos[1] < 1024.0) { // if camera under water
@@ -410,8 +440,8 @@ export const geo_movtex_draw_water_regions = (callContext, node) => {
         gMovetexLastTextureId = -1
 
         for (let i = 0; i < numWaterBoxes; i++) {
-            let waterId = ObjectListProc.gEnvironmentRegions[i * 6 + 1]
-            let waterY = ObjectListProc.gEnvironmentRegions[i * 6 + 6]
+            let waterId = gLinker.ObjectListProcessor.gEnvironmentRegions[i * 6 + 1]
+            let waterY = gLinker.ObjectListProcessor.gEnvironmentRegions[i * 6 + 6]
             let subList = movtex_gen_quads_id(waterId, waterY, quadCollection)
             if (subList) Gbi.gSPDisplayList(gfx, subList)
         }

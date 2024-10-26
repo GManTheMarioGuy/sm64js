@@ -31,8 +31,7 @@ import {
     geo_movtex_update_horizontal, geo_movtex_pause_control, geo_movtex_draw_water_regions,
     geo_movtex_draw_colored
 } from "../../../../game/MovingTexture"
-
-//import { geo_cannon_circle_base } from "../../../../game/ObjectHelpers"
+import { geo_cannon_circle_base } from "../../../../game/ScreenTransition"
 
 
 // 0x0E000648
@@ -69,9 +68,9 @@ export const ssl_geo_000648 = () => {return [
             GEO_CLOSE_NODE(),
         GEO_CLOSE_NODE(),
         GEO_ZBUFFER(0),
-        /*GEO_OPEN_NODE(),
+        GEO_OPEN_NODE(),
             GEO_ASM(0, geo_cannon_circle_base),
-        GEO_CLOSE_NODE(),*/
+        GEO_CLOSE_NODE(),
     GEO_CLOSE_NODE(),
     GEO_END(),
 ]};

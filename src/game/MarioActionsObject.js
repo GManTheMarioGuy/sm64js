@@ -2,7 +2,7 @@ import * as _Linker from "./Linker"
 
 import {
     check_common_action_exits, drop_and_set_mario_action, is_anim_at_end, is_anim_past_end,
-    play_sound_if_no_flag, set_forward_vel, set_mario_action, set_mario_animation, play_mario_action_sound
+    play_sound_if_no_flag, mario_set_forward_vel, set_mario_action, set_mario_animation, play_mario_action_sound
 } from "./Mario"
 
 import {
@@ -234,7 +234,7 @@ const act_punching = (m) => {
     m.actionState = 1
     if (m.actionArg == 0) { m.actionTimer = 7 }
 
-    set_forward_vel(m, sPunchingForwardVelocities[m.actionTimer])
+    mario_set_forward_vel(m, sPunchingForwardVelocities[m.actionTimer])
     if (m.actionTimer > 0) { m.actionTimer-- }
 
     mario_update_punch_sequence(m)

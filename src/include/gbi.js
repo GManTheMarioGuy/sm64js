@@ -735,6 +735,7 @@ export const gDPSetCycleType = (displaylist, newmode) => {
 }
 
 export const gSPVertex = (displaylist, vertices, num_vertices, dest_index) => {
+    vertices = vertices.slice(0, num_vertices)
     displaylist.push({
         words: {
             w0: G_VTX,
@@ -810,7 +811,7 @@ export const gSPDisplayList = (displaylist, childDisplayList) => {
     displaylist.push({
         words: {
             w0: G_DL,
-            w1: { childDisplayList, branch: G_DL_PUSH }
+            w1: { childDisplayList: childDisplayList, branch: G_DL_PUSH }
         }
     })
 }
@@ -854,11 +855,20 @@ export const gDPLoadTextureBlock = (displaylist, timg, fmt, siz, width, height, 
     )
 }
 
+export const gDPSetTile = (displaylist, fmt, siz, line, tmem, tile, palette, cmt, maskt, shiftt, cms, masks, shifts) => {
+    displaylist.push({
+        words: {
+            w0: G_SETTILE,
+            w1: { fmt, siz, line, tmem, tile, palette, cmt, maskt, shiftt, cms, masks, shifts }
+        }
+    })
+}
+
 export const gsSPDisplayList = (childDisplayList) => {
     return {
         words: {
             w0: G_DL,
-            w1: { childDisplayList, branch: G_DL_PUSH }
+            w1: { childDisplayList: childDisplayList, branch: G_DL_PUSH }
         }
     }
 }
@@ -881,14 +891,15 @@ export const gsSPEndDisplayList = () => {
     }
 }
 
-/* export const gsSPGeometryMode = (c, s) => {
+export const gsSPGeometryMode = (c, s) => {
     return {
         words: {
             w0: G_GEOMETRYMODE | ~c,
             w1: s
         }
     }
-} */
+}
+export const gsSPGeometryModeSetFirst = gsSPGeometryMode;
 
 export const gsDPSetAlphaCompare = (newmode) => {
     return {
@@ -1103,14 +1114,13 @@ export const gsSPTexture = (s, t, level, tile, on) => {
   }
 }
 
-export const gSPPopMatrix = (pkt, n) => {
-    pkt = pkt.pop()
-    return {
+export const gSPPopMatrix = (displayList, n) => {
+    displayList.push({
         words: {
             w0: G_POPMTX,
-            w1: { pkt, n }
+            w1: { n }
         }
-    }
+    })
 }
 
 export const gsDPSetTileSize = (t, uls, ult, lrs, lrt) => {
@@ -1200,5 +1210,11 @@ export const gDPPipeSync = () => {return []}
 export const gDPLoadSync = () => {return []}
 export const gDPTileSync = () => {return []}
 export const gDPSetAlpha = () => {return []}
-export const gSPPerspNormalize = () => {return []}
+export const gSPPerspNormalize = (pkt, s) => {return [{
+        words: {
+            w0: G_MOVEWORD,
+            w1: { data: s, offset: 0, index: G_MW_PERSPNORM }
+        }
+    }]
+}
 export const gsDPSetDepthSource = () => {return []}

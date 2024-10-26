@@ -1,11 +1,11 @@
 import { ObjectListProcessorInstance as ObjectListProc, TIME_STOP_ENABLED, TIME_STOP_MARIO_AND_DOORS } from "../ObjectListProcessor"
-import { oFaceAngleYaw, oInteractStatus, oBehParams, oBehParams2ndByte, oPosX, oPosY, oPosZ, oHomeX, oHomeZ, oHomeY, oFaceAnglePitch, oFaceAngleRoll, oMoveAngleYaw, oStarSpawnDisFromHome, oVelY, oForwardVel, oStarSpawnUnkFC, ACTIVE_FLAG_INITIATED_TIME_STOP, oAction, oTimer } from "../../include/object_constants"
-import { INT_STATUS_INTERACTED, INTERACT_STAR_OR_KEY } from "../Interaction"
+import { oFaceAngleYaw, oInteractStatus, oBehParams, oBehParams2ndByte, oPosX, oPosY, oPosZ, oHomeX, oHomeZ, oHomeY, oFaceAnglePitch, oFaceAngleRoll, oMoveAngleYaw, oStarSpawnDisFromHome, oVelY, oForwardVel, oStarSpawnUnkFC, ACTIVE_FLAG_INITIATED_TIME_STOP, oAction, oTimer, oInteractionSubtype, ACTIVE_FLAG_DEACTIVATED, oHiddenStarTriggerCounter } from "../../include/object_constants"
+import { INT_STATUS_INTERACTED, INT_SUBTYPE_NO_EXIT, INTERACT_STAR_OR_KEY } from "../Interaction"
 import { save_file_get_star_flags, } from "../SaveFile"
 import { AreaInstance as Area } from "../Area"
 import { MODEL_TRANSPARENT_STAR, MODEL_STAR, MODEL_NONE } from "../../include/model_ids"
-import { clear_time_stop_flags, cur_obj_become_intangible, cur_obj_become_tangible, obj_mark_for_deletion, set_time_stop_flags, spawn_object, spawn_object_abs_with_rot, obj_set_hitbox } from "../ObjectHelpers"
-import { bhvSparkleSpawn, bhvStarSpawnCoordinates } from "../BehaviorData"
+import { clear_time_stop_flags, cur_obj_become_intangible, cur_obj_become_tangible, obj_mark_for_deletion, set_time_stop_flags, spawn_object, spawn_object_abs_with_rot, obj_set_hitbox, count_objects_with_behavior, spawn_mist_particles } from "../ObjectHelpers"
+import { bhvSparkleSpawn } from "../BehaviorData"
 import { atan2s, sqrtf } from "../../engine/math_util"
 import { COURSE_BBH } from "../../include/course_table"
 import { CUTSCENE_RED_COIN_STAR_SPAWN, CUTSCENE_STAR_SPAWN } from "../Camera"
@@ -15,6 +15,8 @@ import { sins } from "../../utils"
 import { cur_obj_play_sound_1, cur_obj_play_sound_2 } from "../SpawnSound"
 import { SOUND_ENV_STAR, SOUND_GENERAL_STAR_APPEARS } from "../../include/sounds"
 import { SpawnObjectInstance as SpawnObject } from "../SpawnObject"
+import { COURSE_JRB } from "../../levels/course_defines"
+import { IngameMenuInstance as IngameMenu } from "../IngameMenu"
 
 const sCollectStarHitbox = {
     interactType:      INTERACT_STAR_OR_KEY,
@@ -35,12 +37,12 @@ const bhv_collect_star_init = () => {
     let currentLevelStarFlags
 
     starId = (o.rawData[oBehParams] >> 24) & 0xFF
-    currentLevelStarFlags = save_file_get_star_flags(Area.gCurrSaveFileNum - 1, Area.gCurrCourseNum - 1)
-    /*if (currentLevelStarFlags & (1 << starId)) {
+    currentLevelStarFlags = save_file_get_star_flags(gLinker.Area.gCurrSaveFileNum - 1, gLinker.gCurrCourseNum - 1)
+    if (currentLevelStarFlags & (1 << starId)) {
         o.gfx.sharedChild = Area.gLoadedGraphNodes[MODEL_TRANSPARENT_STAR]
     } else {
         o.gfx.sharedChild = Area.gLoadedGraphNodes[MODEL_STAR]
-    }*/
+    }
 
     obj_set_hitbox(o, sCollectStarHitbox)
 }
@@ -64,7 +66,7 @@ export const bhv_star_spawn_init = () => {
     o.rawData[oForwardVel] = o.rawData[oStarSpawnDisFromHome] / 30.0
     o.rawData[oStarSpawnUnkFC] = o.rawData[oPosY]
 
-    if (o.rawData[oBehParams2ndByte] == 0 || gCurrCourseNum == COURSE_BBH) {
+    if (o.rawData[oBehParams2ndByte] == 0 || Area.gCurrCourseNum == COURSE_BBH) {
         Camera.cutscene_object(CUTSCENE_STAR_SPAWN, o)
     } else {
         Camera.cutscene_object(CUTSCENE_RED_COIN_STAR_SPAWN, o)
@@ -139,7 +141,7 @@ export const bhv_star_spawn_loop = () =>{
 const spawn_star = (sp30, sp34, sp38, sp3C) => {
     const o = ObjectListProc.gCurrentObject
 
-    sp30 = spawn_object_abs_with_rot(o, MODEL_STAR, bhvStarSpawnCoordinates, o.rawData[oPosX], o.rawData[oPosY], o.rawData[oPosZ], 0, 0, 0)
+    sp30 = spawn_object_abs_with_rot(o, MODEL_STAR, gLinker.behaviors.bhvStarSpawnCoordinates, o.rawData[oPosX], o.rawData[oPosY], o.rawData[oPosZ], 0, 0, 0)
     sp30.rawData[oBehParams] = o.rawData[oBehParams]
     sp30.rawData[oHomeX] = sp34
     sp30.rawData[oHomeY] = sp38
@@ -149,13 +151,66 @@ const spawn_star = (sp30, sp34, sp38, sp3C) => {
     return sp30
 }
 
-export const spawn_default_star = (sp20, sp24, sp28) => {
-    let sp1C = new Object()
-    sp1C = spawn_star(sp1C, sp20, sp24, sp28)
-    sp1C.rawData[oBehParams2ndByte] = 0
+export const spawn_default_star = (homeX, homeY, homeZ) => {
+    let star;
+    star = spawn_star(star, homeX, homeY, homeZ)
+    star.rawData[oBehParams2ndByte] = 0
+}
+
+export const spawn_red_coin_cutscene_star = (homeX, homeY, homeZ) => {
+    let star;
+    star = spawn_star(star, homeX, homeY, homeZ)
+    star.rawData[oBehParams2ndByte] = 1
+}
+
+export const spawn_no_exit_star = (homeX, homeY, homeZ) => {
+    let star;
+    star = spawn_star(star, homeX, homeY, homeZ)
+    star.rawData[oBehParams2ndByte] = 1;
+    star.rawData[oInteractionSubtype] |= INT_SUBTYPE_NO_EXIT;
+}
+
+const bhv_hidden_red_coin_star_init = () => {
+    const o = gLinker.ObjectListProcessor.gCurrentObject;
+    if (Area.gCurrCourseNum != COURSE_JRB) spawn_object(o, MODEL_TRANSPARENT_STAR, gLinker.behaviors.bhvRedCoinStarMarker)
+
+    let count = count_objects_with_behavior(gLinker.behaviors.bhvRedCoin)
+
+    if (count == 0) {
+        let star = spawn_object_abs_with_rot(o, 0, MODEL_STAR, gLinker.behaviors.bhvStar, o.rawData[oPosX], o.rawData[oPosY], o.rawData[oPosZ], 0, 0, 0)
+
+        star.rawData[oBehParams] = o.rawData[oBehParams]
+        o.activeFlags = ACTIVE_FLAG_DEACTIVATED;
+    }
+
+    o.rawData[oHiddenStarTriggerCounter] = 8 - count;
+}
+
+const bhv_hidden_red_coin_star_loop = () => {
+    const o = gLinker.ObjectListProcessor.gCurrentObject;
+
+    IngameMenu.gRedCoinsCollected = o.rawData[oHiddenStarTriggerCounter];
+
+    switch (o.rawData[oAction]) {
+        case 0:
+            if (o.rawData[oHiddenStarTriggerCounter] == 8) {
+                o.rawData[oAction] = 1;
+            }
+            break;
+
+        case 1:
+            if (o.rawData[oTimer] > 2) {
+                spawn_red_coin_cutscene_star(o.rawData[oPosX], o.rawData[oPosY], o.rawData[oPosZ])
+                spawn_mist_particles();
+                o.activeFlags = ACTIVE_FLAG_DEACTIVATED;
+            }
+            break
+    }
 }
 
 gLinker.bhv_collect_star_init = bhv_collect_star_init
 gLinker.bhv_collect_star_loop = bhv_collect_star_loop
 gLinker.bhv_star_spawn_init = bhv_star_spawn_init
 gLinker.bhv_star_spawn_loop = bhv_star_spawn_loop
+gLinker.bhv_hidden_red_coin_star_init = bhv_hidden_red_coin_star_init
+gLinker.bhv_hidden_red_coin_star_loop = bhv_hidden_red_coin_star_loop

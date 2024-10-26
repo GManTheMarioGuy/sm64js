@@ -9,15 +9,19 @@ WARP_TRANSITION_FADE_INTO_MARIO,
 WARP_TRANSITION_FADE_FROM_MARIO,
 WARP_TRANSITION_FADE_FROM_BOWSER,
 WARP_TRANSITION_FADE_INTO_BOWSER,
+AreaInstance as Area
  } from "./Area"
 import { GameInstance as Game } from "./Game"
 import * as Gbi from "../include/gbi"
-import { atan2s } from "../engine/math_util"
+import { atan2s, round_float } from "../engine/math_util"
 import { dl_proj_mtx_fullscreen, dl_transition_draw_filled_region,
 	texture_transition_star_half, texture_transition_circle_half,
 	texture_transition_mario, texture_transition_bowser_half,
 	dl_draw_quad_verts_0123, dl_screen_transition_end, matrix_identity, matrix_fullscreen } from "../bin/segment2"
-import { round_float, make_vertex } from "./GeoMisc"
+import { make_vertex } from "./GeoMisc"
+import { SCREEN_HEIGHT, SCREEN_WIDTH } from "./Skybox"
+import { GEO_CONTEXT_RENDER } from "../engine/graph_node"
+import { CAMERA_MODE_INSIDE_CANNON } from "./Camera"
 
 const canvas = document.querySelector('#gameCanvas')
 
@@ -244,14 +248,38 @@ export const render_screen_transition = (fadeTimer, transType, transTime, transD
     }
 }
 
-export const geo_cannon_circle_base = (callContext, node, mtx) => {
-    // let dlist = null
+const render_cannon_circle_base = () => {
+	const verts = [];
+	const g = [];
 
-    // if (callContext == GEO_CONTEXT_RENDER && gCurrentArea != null
-    //     && gCurrentArea.camera.mode == CAMERA_MODE_INSIDE_CANNON) {
-    //     graphNode.fnNode.node.flags = (graphNode.fnNode.node.flags & 0xFF) | 0x500
-    //     dlist = render_cannon_circle_base()
-    // }
-    // return dlist
-    return []
+	make_vertex(verts, 0, 0, 0, -1, -1152, 1824, 0, 0, 0, 255);
+	make_vertex(verts, 1, SCREEN_WIDTH, 0, -1, 1152, 1824, 0, 0, 0, 255);
+	make_vertex(verts, 2, SCREEN_WIDTH, SCREEN_HEIGHT, -1, 1152, 192, 0, 0, 0, 255);
+	make_vertex(verts, 3, 0, SCREEN_HEIGHT, -1, -1152, 192, 0, 0, 0, 255);
+
+	Gbi.gSPDisplayList(g, dl_proj_mtx_fullscreen);
+	Gbi.gDPSetCombineMode(g, Gbi.G_CC_MODULATEIDECALA, Gbi.G_CC_MODULATEIDECALA);
+	Gbi.gDPSetTextureFilter(g, Gbi.G_TF_BILERP);
+	Gbi.gDPLoadTextureBlock(g, sTextureTransitionID[TEX_TRANS_CIRCLE], Gbi.G_IM_FMT_IA, Gbi.G_IM_SIZ_8b,
+		32, 64, 0, Gbi.G_TX_WRAP | Gbi.G_TX_MIRROR, Gbi.G_TX_WRAP | Gbi.G_TX_MIRROR, 5, 6, Gbi.G_TX_NOLOD, Gbi.G_TX_NOLOD);
+	Gbi.gSPTexture(g, 0xFFFF, 0xFFFF, 0, Gbi.G_TX_RENDERTILE, Gbi.G_ON);
+	Gbi.gSPVertex(g, verts, 4, 0);
+	Gbi.gSPDisplayList(g, dl_draw_quad_verts_0123);
+	Gbi.gSPTexture(g, 0xFFFF, 0xFFFF, 0, Gbi.G_TX_RENDERTILE, Gbi.G_OFF);
+	Gbi.gSPDisplayList(g, dl_screen_transition_end);
+	Gbi.gSPEndDisplayList(g);
+
+	return g;
+}
+
+export const geo_cannon_circle_base = (callContext, node, mtx) => {
+    let dlist = null
+	const graphNode = node;
+
+    if (callContext == GEO_CONTEXT_RENDER && Area.gCurrentArea != null
+        && Area.gCurrentArea.camera.mode == CAMERA_MODE_INSIDE_CANNON) {
+        graphNode.flags = (graphNode.flags & 0xFF) | 0x500
+        dlist = render_cannon_circle_base()
+    }
+    return dlist
 }

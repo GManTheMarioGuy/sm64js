@@ -1,5 +1,5 @@
 import { ObjectListProcessorInstance as ObjectListProc } from "../ObjectListProcessor"
-import { oCoinCollectedFlags, oBehParams, oAction, oDistanceToMario, oBehParams2ndByte, oTimer, oCoinOnGround, oVelX, oPosY, oVelZ, oFloorHeight, oAnimState, oInteractStatus, oPosX, oPosZ, oVelY, oCoinBaseVelY, oForwardVel, oMoveAngleYaw, oFloor, oMoveFlags, OBJ_MOVE_ON_GROUND, oSubAction, oBounciness, oDamageOrCoinValue, oBooDeathStatus, OBJ_MOVE_LANDED, OBJ_MOVE_ABOVE_DEATH_BARRIER, OBJ_MOVE_ABOVE_LAVA, OBJ_MOVE_BOUNCE } from "../../include/object_constants"
+import { oCoinCollectedFlags, oBehParams, oAction, oDistanceToMario, oBehParams2ndByte, oTimer, oCoinOnGround, oVelX, oPosY, oVelZ, oFloorHeight, oAnimState, oInteractStatus, oPosX, oPosZ, oVelY, oCoinBaseVelY, oForwardVel, oMoveAngleYaw, oFloor, oMoveFlags, OBJ_MOVE_ON_GROUND, oSubAction, oBounciness, oDamageOrCoinValue, oBooDeathStatus, OBJ_MOVE_LANDED, OBJ_MOVE_ABOVE_DEATH_BARRIER, OBJ_MOVE_ABOVE_LAVA, OBJ_MOVE_BOUNCE, COIN_FORMATION_BP_FLAG_MASK, COIN_FORMATION_BP_LINE_HORIZONTAL, COIN_FORMATION_BP_LINE_VERTICAL, COIN_FORMATION_BP_RING_HORIZONTAL, COIN_FORMATION_BP_RING_VERTICAL, COIN_FORMATION_BP_ARROW } from "../../include/object_constants"
 import {
     spawn_object_relative, cur_obj_set_behavior, cur_obj_update_floor_height, obj_mark_for_deletion,
     cur_obj_set_model, spawn_object, cur_obj_scale, cur_obj_become_intangible,
@@ -29,7 +29,7 @@ const sYellowCoinHitbox = {
 }
 
 const bhv_coin_sparkles_init = () => {
-    const o = ObjectListProc.gCurrentObject
+    const o = gLinker.ObjectListProcessor.gCurrentObject
 
     if (o.rawData[oInteractStatus] & INT_STATUS_INTERACTED && !(o.rawData[oInteractStatus] & INT_STATUS_TOUCHED_BOB_OMB)) {
         spawn_object(o, MODEL_SPARKLES, gLinker.behaviors.bhvGoldenCoinSparkles)
@@ -42,7 +42,7 @@ const bhv_coin_sparkles_init = () => {
 }
 
 const bhv_yellow_coin_init = () => {
-    const o = ObjectListProc.gCurrentObject
+    const o = gLinker.ObjectListProcessor.gCurrentObject
 
     cur_obj_set_behavior(gLinker.behaviors.bhvYellowCoin)
     obj_set_hitbox(o, sYellowCoinHitbox)
@@ -56,14 +56,14 @@ const bhv_yellow_coin_init = () => {
 }
 
 const bhv_yellow_coin_loop = () => {
-    const o = ObjectListProc.gCurrentObject
+    const o = gLinker.ObjectListProcessor.gCurrentObject
 
     bhv_coin_sparkles_init()
     o.rawData[oAnimState]++
 }
 
 const bhv_temp_coin_loop = () => {
-    const o = ObjectListProc.gCurrentObject
+    const o = gLinker.ObjectListProcessor.gCurrentObject
 
     o.rawData[oAnimState]++
     if (cur_obj_wait_then_blink(200, 20))
@@ -72,7 +72,7 @@ const bhv_temp_coin_loop = () => {
 }
 
 const bhv_coin_init = () => {
-    const o = ObjectListProc.gCurrentObject
+    const o = gLinker.ObjectListProcessor.gCurrentObject
 
     o.rawData[oVelY] = Math.random() * 10.0 + 30 + o.rawData[oCoinBaseVelY]
     o.rawData[oForwardVel] = Math.random() * 10.0
@@ -83,7 +83,7 @@ const bhv_coin_init = () => {
 }
 
 const bhv_coin_loop = () => {
-    const o = ObjectListProc.gCurrentObject
+    const o = gLinker.ObjectListProcessor.gCurrentObject
 
     cur_obj_update_floor_and_walls()
     cur_obj_if_hit_wall_bounce_away()
@@ -123,7 +123,7 @@ const bhv_coin_loop = () => {
 }
 
 const bhv_coin_formation_spawn_loop = () => {
-    const o = ObjectListProc.gCurrentObject
+    const o = gLinker.ObjectListProcessor.gCurrentObject
 
     if (o.rawData[oTimer] == 0) {
         cur_obj_set_behavior(gLinker.behaviors.bhvYellowCoin)
@@ -151,53 +151,63 @@ const bhv_coin_formation_spawn_loop = () => {
         obj_mark_for_deletion(o)
 }
 
-const spawn_coin_in_formation = (sp50, sp54) => {
-    const o = ObjectListProc.gCurrentObject
-    const sp40 = [0, 0, 0]
-    let sp3C = 1, sp38 = 1
+const sCoinArrowPositions = [
+    [ 0, -150 ],
+    [ 0, -50 ],
+    [ 0, 50 ],
+    [ 0, 150 ],
+    [ -50, 100 ],
+    [ -100, 50 ],
+    [ 50, 100 ],
+    [ 100, 50 ],
+]
 
-    switch (sp54 & 7) {
-        case 0:
-            sp40[2] = 160 * (sp50 - 2)
-            if (sp50 > 4) sp3C = 0
+const spawn_coin_in_formation = (coinIndex, coinFormationFlags) => {
+    const o = gLinker.ObjectListProcessor.gCurrentObject
+    const pos = [0, 0, 0]
+    let setSpawner = true, onGround = true
+
+    switch (coinFormationFlags & COIN_FORMATION_BP_FLAG_MASK) {
+        case COIN_FORMATION_BP_LINE_HORIZONTAL:
+            pos[2] = 160 * (coinIndex - 2)
+            if (coinIndex > 4) setSpawner = false
             break
-        case 1:
-            sp38 = 0
-            sp40[1] = 160 * sp50 * 0.8 // 128 * sp50
-            if (sp50 > 4)
-                sp3C = 0
+        case COIN_FORMATION_BP_LINE_VERTICAL:
+            onGround = false;
+            pos[1] = 160 * coinIndex * 0.8
+            if (coinIndex > 4) setSpawner = false
             break
-        case 2:
-            sp40[0] = sins(sp50 << 13) * 300.0
-            sp40[2] = coss(sp50 << 13) * 300.0
+        case COIN_FORMATION_BP_RING_HORIZONTAL:
+            pos[0] = sins(coinIndex << 13) * 300.0
+            pos[2] = coss(coinIndex << 13) * 300.0
             break
-        case 3:
-            sp38 = 0  /// flying
-            sp40[0] = sins(sp50 << 13) * 200.0
-            sp40[1] = coss(sp50 << 13) * 200.0 + 200.0
+        case COIN_FORMATION_BP_RING_VERTICAL:
+            onGround = false;
+            pos[0] = sins(coinIndex << 13) * 200.0
+            pos[1] = coss(coinIndex << 13) * 200.0 + 200.0
             break
-        case 4:
-            sp40[0] = D_8032F2A4[sp50][0]
-            sp40[2] = D_8032F2A4[sp50][1]
+        case COIN_FORMATION_BP_ARROW:
+            pos[0] = sCoinArrowPositions[coinIndex][0]
+            pos[2] = sCoinArrowPositions[coinIndex][1]
             break
     }
-    if (sp54 & 0x10) sp38 = 0
+    if (coinFormationFlags & 0x10) onGround = false;
 
-    if (sp3C) {
-        const sp4C = spawn_object_relative(sp50, sp40[0], sp40[1], sp40[2], o, MODEL_YELLOW_COIN, gLinker.behaviors.bhvCoinFormationSpawn)
+    if (setSpawner) {
+        const coinSpawner = spawn_object_relative(coinIndex, pos[0], pos[1], pos[2], o, MODEL_YELLOW_COIN, gLinker.behaviors.bhvCoinFormationSpawn)
 
-        sp4C.rawData[oCoinCollectedFlags] = sp38
+        coinSpawner.rawData[oCoinOnGround] = onGround
     }
 }
 
 const bhv_coin_formation_init = () => {
-    const o = ObjectListProc.gCurrentObject
+    const o = gLinker.ObjectListProcessor.gCurrentObject
 
     o.rawData[oCoinCollectedFlags] = (o.rawData[oBehParams] >> 8) & 0xFF
 }
 
 const bhv_coin_formation_loop = () => {
-    const o = ObjectListProc.gCurrentObject
+    const o = gLinker.ObjectListProcessor.gCurrentObject
 
     switch (o.rawData[oAction]) {
         case 0:
@@ -223,7 +233,7 @@ const bhv_coin_formation_loop = () => {
 }
 
 const coin_inside_boo_act_1 = () => {
-    const o = ObjectListProc.gCurrentObject
+    const o = gLinker.ObjectListProcessor.gCurrentObject
     cur_obj_update_floor_and_walls()
     cur_obj_if_hit_wall_bounce_away()
     if (o.rawData[oMoveFlags] & OBJ_MOVE_BOUNCE)
@@ -242,7 +252,7 @@ const coin_inside_boo_act_1 = () => {
 }
 
 const coin_inside_boo_act_0 = () => {
-    const o = ObjectListProc.gCurrentObject
+    const o = gLinker.ObjectListProcessor.gCurrentObject
     let parent = o.parentObj
     const gMarioObject = gLinker.ObjectListProcessor.gMarioObject
 
@@ -271,7 +281,7 @@ export const bhv_coin_inside_boo_loop = () => {
 const bhv_coin_sparkles_loop = () => { cur_obj_scale(0.6) }
 
 const bhv_golden_coin_sparkles_loop = () => {
-    const o = ObjectListProc.gCurrentObject
+    const o = gLinker.ObjectListProcessor.gCurrentObject
     const sp24 = 30.0
     const sp2C = spawn_object(o, MODEL_SPARKLES, gLinker.behaviors.bhvCoinSparkles)
     sp2C.rawData[oPosX] += (Math.random() * sp24) - (sp24 / 2)

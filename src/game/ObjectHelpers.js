@@ -223,6 +223,8 @@ export const geo_switch_area = (callerContext, node) => {
     } else {
         node.selectedCase = 0
     }
+
+    return null;
 }
 
 export const obj_update_pos_from_parent_transformation = (a0, a1) => {
@@ -315,7 +317,6 @@ export const lateral_dist_between_objects = (obj1, obj2) => {
     const dz = obj1.rawData[oPosZ] - obj2.rawData[oPosZ]
     return Math.sqrt(dx * dx + dz * dz)
 }
-
 export const dist_between_objects = (obj1, obj2) => {
     const dx = obj1.rawData[oPosX] - obj2.rawData[oPosX]
     const dy = obj1.rawData[oPosY] - obj2.rawData[oPosY]
@@ -374,6 +375,24 @@ export const approach_s16_symmetric = (value, target, increment) =>{
         if (dist < -increment) value = s16(value - increment)
         else value = target
     }
+}
+
+export const approach_symmetric = (value, target, increment) => {
+    const dist = target - value
+
+    if (dist >= 0) {
+        if (dist > increment) {
+            value += increment
+        } else {
+            value = target
+        }
+    } else {
+        if (dist < -increment) {
+            value -= increment
+        } else {
+            value = target
+        }
+    }
 
     return value
 }
@@ -422,7 +441,7 @@ export const obj_turn_toward_object = (obj, target, angleIndex, turnAmount) => {
             c = target.rawData[oPosZ]
             b = obj.rawData[oPosX]
             d = target.rawData[oPosX]
-
+        
             targetAngle = atan2s(c - a, d - b)
             break
     }
@@ -1600,7 +1619,7 @@ export const cur_obj_spawn_loot_coin_at_mario_pos = () => {
 
     coin = spawn_object(o, MODEL_YELLOW_COIN, gLinker.behaviors.bhvSingleCoinGetsSpawned);
     coin.rawData[oVelY] = 30.0;
-
+  
     obj_copy_pos(coin, gLinker.ObjectListProcessor.gMarioObject);
 }
 
@@ -2196,7 +2215,7 @@ export const cur_obj_progress_action_table = () => {
         nextAction = actionTable[0];
         o.rawData[oToxBoxActionStep] = 0;
     }
-
+  
     return nextAction;
 }
 
@@ -2526,7 +2545,7 @@ export const cur_obj_update_dialog = (actionArg, dialogFlags, dialogID) => {
                 if (IngameMenu.gDialogResponse != DIALOG_RESPONSE_NONE)
                     cur_obj_end_dialog(dialogFlags, IngameMenu.gDialogResponse);
             } else if (dialogFlags & DIALOG_FLAG_TEXT_DEFAULT) {
-                if (IngameMenu.get_dialog_id() == DIALOG_NONE)
+                if (IngameMenu.get_dialog_id() == DIALOG_NONE.id)
                     cur_obj_end_dialog(dialogFlags, DIALOG_RESPONSE_NOT_DEFINED);
             } else cur_obj_end_dialog(dialogFlags, DIALOG_RESPONSE_NOT_DEFINED);
             break;
@@ -2801,26 +2820,6 @@ export const cur_obj_spawn_star_at_y_offset = (targetX, targetY, targetZ, offset
     o.rawData[oPosY] += offsetY + gDebugInfo[DebugPage.DEBUG_PAGE_ENEMYINFO][0]
     spawn_default_star(targetX, targetY, targetZ)
     o.rawData[oPosY] = objectPosY
-}
-
-export const approach_symmetric = (value, target, increment) => {
-    const dist = s16(target - value)
-
-    if (dist >= 0) {
-        if (dist > increment) {
-            value += increment
-        } else {
-            value = target
-        }
-    } else {
-        if (dist < -increment) {
-            value -= increment
-        } else {
-            value = target
-        }
-    }
-
-    return value
 }
 
 gLinker.bhv_init_room = bhv_init_room

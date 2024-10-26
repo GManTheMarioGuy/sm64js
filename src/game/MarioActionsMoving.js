@@ -3,9 +3,9 @@ import * as _Linker from "./Linker"
 import {
     adjust_sound_for_speed, check_common_action_exits, drop_and_set_mario_action, find_floor_slope,
     is_anim_at_end, is_anim_past_frame, mario_facing_downhill, mario_floor_is_slippery,
-    mario_floor_is_slope, mario_get_floor_class, mario_set_forward_vel,
+    mario_floor_is_slope, mario_get_floor_class, 
     play_mario_heavy_landing_sound_once, play_mario_landing_sound, play_mario_landing_sound_once,
-    play_sound_and_spawn_particles, play_sound_if_no_flag, set_forward_vel, set_jump_from_landing,
+    play_sound_and_spawn_particles, play_sound_if_no_flag, mario_set_forward_vel, set_jump_from_landing,
     set_jumping_action, set_mario_action, set_mario_anim_with_accel, set_mario_animation,
     set_water_plunge_action,
 } from "./Mario"
@@ -563,7 +563,7 @@ const slide_bonk = (m, fastAction, slowAction) => {
         mario_bonk_reflection(m, true)
         drop_and_set_mario_action(m, fastAction, 0)
     } else {
-        set_forward_vel(m, 0.0)
+        mario_set_forward_vel(m, 0.0)
         set_mario_action(m, slowAction, 0)
     }
 }
@@ -616,7 +616,7 @@ const update_decelerating_speed = (m) => {
 
     if (m.forwardVel == 0.0) stopped = 1
 
-    set_forward_vel(m, m.forwardVel)
+    mario_set_forward_vel(m, m.forwardVel)
 
     return stopped
 }
@@ -659,7 +659,7 @@ const act_decelerating = (m) => {
             if (slopeClass == SURFACE_CLASS_VERY_SLIPPERY) {
                 mario_bonk_reflection(m, 1)
             } else {
-                set_forward_vel(m, 0)
+                mario_set_forward_vel(m, 0)
             }
             break
     }
@@ -751,7 +751,7 @@ export const act_hold_decelerating = (m) => {
 
 const begin_walking_action = (m, forwardVel, action, actionArg) => {
     m.faceAngle[1] = m.intendedYaw
-    set_forward_vel(m, forwardVel)
+    mario_set_forward_vel(m, forwardVel)
     return set_mario_action(m, action, actionArg)
 }
 
@@ -825,7 +825,7 @@ const apply_landing_accel = (m, frictionFactor) => {
     if (!mario_floor_is_slope(m)) {
         m.forwardVel *= frictionFactor
         if (m.forwardVel * m.forwardVel < 1.0) {
-            set_forward_vel(m, 0.0)
+            mario_set_forward_vel(m, 0.0)
             stopped = true
         }
     }
@@ -1046,7 +1046,7 @@ const update_sliding = (m, stopSpeed) => {
     update_sliding_angle(m, accel, lossFactor)
 
     if (!mario_floor_is_slope(m) && m.forwardVel * m.forwardVel < stopSpeed * stopSpeed) {
-        set_forward_vel(m, 0.0)
+        mario_set_forward_vel(m, 0.0)
         stopped = 1
     }
     return stopped
@@ -1213,7 +1213,7 @@ const push_or_sidle_wall = (m, startPos) => {
     let val04 = s32(movedDistance * 2.0 * 0x10000)
 
     if (m.forwardVel > 6.0) {
-        set_forward_vel(m, 6.0)
+        mario_set_forward_vel(m, 6.0)
     }
 
     if (m.wall != null) {
@@ -1355,7 +1355,7 @@ const act_dive_slide = (m) => {
     play_mario_landing_sound_once(m, SOUND_ACTION_TERRAIN_BODY_HIT_GROUND)
 
     if (update_sliding(m, 8.0) && is_anim_at_end(m)) {
-        set_forward_vel(m, 0.0)
+        mario_set_forward_vel(m, 0.0)
         set_mario_action(m, ACT_STOMACH_SLIDE_STOP, 0)
     }
 
@@ -1422,7 +1422,7 @@ const act_crawling = (m) => {
             break
         case GROUND_STEP_HIT_WALL:
             if (m.forwardVel > 10) {
-                set_forward_vel(m, 10)
+                mario_set_forward_vel(m, 10)
             }
         case GROUND_STEP_NONE:
             align_with_floor(m)
@@ -1604,9 +1604,9 @@ const common_ground_knockback_action = (m, animation, arg2, arg3, arg4) => {
     if (val04 < arg2) {
         apply_landing_accel(m, 0.9)
     } else if (m .forwardVel >= 0.0) {
-        set_forward_vel(m, 0.1)
+        mario_set_forward_vel(m, 0.1)
     } else {
-        set_forward_vel(m, -0.1)
+        mario_set_forward_vel(m, -0.1)
     }
 
     if (perform_ground_step(m) == GROUND_STEP_LEFT_GROUND) {

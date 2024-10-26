@@ -37,8 +37,7 @@ import { sl_seg7_dl_0700A5A0 } from "./7/model.inc"
 import {
     geo_movtex_pause_control, geo_movtex_draw_water_regions
 } from "../../../../game/MovingTexture"
-
-//import { geo_cannon_circle_base } from "../../../../game/ObjectHelpers"
+import { geo_cannon_circle_base } from "../../../../game/ScreenTransition"
 
 
 // 0x0E0003A8
@@ -73,9 +72,9 @@ export const sl_geo_0003A8 = () => {return [
             GEO_CLOSE_NODE(),
         GEO_CLOSE_NODE(),
         GEO_ZBUFFER(0),
-        /*GEO_OPEN_NODE(),
+        GEO_OPEN_NODE(),
             GEO_ASM(0, geo_cannon_circle_base),
-        GEO_CLOSE_NODE(),*/
+        GEO_CLOSE_NODE(),
     GEO_CLOSE_NODE(),
     GEO_END(),
 ]};

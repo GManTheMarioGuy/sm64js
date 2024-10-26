@@ -59,6 +59,7 @@ import {
 import {
    LEVEL_LLL
 } from "../levels/level_defines_constants"
+import { SAVE_FLAG_CAP_ON_GROUND, SAVE_FLAG_CAP_ON_KLEPTO, SAVE_FLAG_CAP_ON_MR_BLIZZARD, SAVE_FLAG_CAP_ON_UKIKI, save_file_clear_flags } from "./SaveFile"
 
 
 ////// Mario Constants
@@ -742,120 +743,150 @@ export const sBackwardKnockbackActions = [
     [ACT_BACKWARD_WATER_KB, ACT_BACKWARD_WATER_KB, ACT_BACKWARD_WATER_KB]
 ]
 
-export const init_marios = () => {
-    const gMarioState = LevelUpdate.gMarioState
-    const gMarioSpawnInfo = Area.gMarioSpawnInfo
+const sTerrainSounds = [
+    // default,              hard,                 slippery,
+    // very slippery,        noisy default,        noisy slippery
+    [ SOUND_TERRAIN_DEFAULT, SOUND_TERRAIN_STONE,  SOUND_TERRAIN_GRASS,
+      SOUND_TERRAIN_GRASS,   SOUND_TERRAIN_GRASS,  SOUND_TERRAIN_DEFAULT ], // TERRAIN_GRASS
+    [ SOUND_TERRAIN_STONE,   SOUND_TERRAIN_STONE,  SOUND_TERRAIN_STONE,
+      SOUND_TERRAIN_STONE,   SOUND_TERRAIN_GRASS,  SOUND_TERRAIN_GRASS ], // TERRAIN_STONE
+    [ SOUND_TERRAIN_SNOW,    SOUND_TERRAIN_ICE,    SOUND_TERRAIN_SNOW,
+      SOUND_TERRAIN_ICE,     SOUND_TERRAIN_STONE,  SOUND_TERRAIN_STONE ], // TERRAIN_SNOW
+    [ SOUND_TERRAIN_SAND,    SOUND_TERRAIN_STONE,  SOUND_TERRAIN_SAND,
+      SOUND_TERRAIN_SAND,    SOUND_TERRAIN_STONE,  SOUND_TERRAIN_STONE ], // TERRAIN_SAND
+    [ SOUND_TERRAIN_SPOOKY,  SOUND_TERRAIN_SPOOKY, SOUND_TERRAIN_SPOOKY,
+      SOUND_TERRAIN_SPOOKY,  SOUND_TERRAIN_STONE,  SOUND_TERRAIN_STONE ], // TERRAIN_SPOOKY
+    [ SOUND_TERRAIN_DEFAULT, SOUND_TERRAIN_STONE,  SOUND_TERRAIN_GRASS,
+      SOUND_TERRAIN_ICE,     SOUND_TERRAIN_STONE,  SOUND_TERRAIN_ICE ], // TERRAIN_WATER
+    [ SOUND_TERRAIN_STONE,   SOUND_TERRAIN_STONE,  SOUND_TERRAIN_STONE,
+      SOUND_TERRAIN_STONE,   SOUND_TERRAIN_ICE,    SOUND_TERRAIN_ICE ], // TERRAIN_SLIDE
+]
 
-    gMarioState.actionTimer = 0
-    gMarioState.framesSinceA = 0xFF
-    gMarioState.framesSinceB = 0xFF
+/**
+ * These are the scaling values for the x and z axis for Mario
+ * when he is close to unsquishing.
+ */
+const sSquishScaleOverTime = [ 0x46, 0x32, 0x32, 0x3C, 0x46, 0x50, 0x50, 0x3C,
+    0x28, 0x14, 0x14, 0x1E, 0x32, 0x3C, 0x3C, 0x28 ]
 
-    gMarioState.invincTimer = 0
+/**
+ * Is a binary representation of the frames to flicker Mario's cap when the timer
+ * is running out.
+ *
+ * Equals [1000]^5 . [100]^8 . [10]^9 . [1] in binary, which is
+ * 100010001000100010001001001001001001001001001010101010101010101.
+ */
+const sCapFlickerFrames = 0x4444449249255555
 
-    gMarioState.flags = MARIO_CAP_ON_HEAD | MARIO_NORMAL_CAP
+export const is_anim_at_end = (m) => {
+    const o = m.marioObj //TODO fix animInfo as animInfo
+    return (o.gfx.animInfo.animFrame + 1) == o.gfx.animInfo.curAnim.unk08
+}
 
-    gMarioState.forwardVel = 0.0
-    gMarioState.squishTimer = 0
+export const is_anim_past_end = (m) => {
+    const o = m.marioObj
+    return o.gfx.animInfo.animFrame >= (o.gfx.animInfo.curAnim.unk08 - 2)
+}
 
-    gMarioState.hurtCounter = 0
-    gMarioState.healCounter = 0
+export const set_mario_animation = (m, targetAnimID) => {
+    const o = m.marioObj
+    m.animation.targetAnim = m.animation.animList[targetAnimID]
 
-    gMarioState.capTimer = 0
-    gMarioState.quicksandDepth = 0.0
+    if (m.animation.targetAnim == undefined) throw "cant find animation"
 
-    gMarioState.heldObj = null
-    gMarioState.riddenObj = null
-    gMarioState.usedObj = null
+    if (o.gfx.animInfo.animID != targetAnimID) {
+        o.gfx.animInfo.animID = targetAnimID
+        o.gfx.animInfo.curAnim = m.animation.targetAnim
+        o.gfx.animInfo.animAccel = 0
+        o.gfx.animInfo.animYTrans = m.unkB0
 
-    gMarioState.waterLevel =
-        SurfaceCollision.find_water_level(gMarioSpawnInfo.startPos[0], gMarioSpawnInfo.startPos[2])
-
-    gMarioState.area = Area.gCurrentArea
-    gMarioState.marioObj = ObjectListProcessor.gMarioObject
-    gMarioState.marioObj.gfx.animInfo.animID = -1
-    gMarioState.faceAngle = [...Area.gMarioSpawnInfo.startAngle]
-    gMarioState.angleVel = [0, 0, 0]
-    gMarioState.pos = [...Area.gMarioSpawnInfo.startPos]
-    // gMarioState.slideYaw = 0
-    gMarioState.vel = [0, 0, 0]
-
-    gMarioState.floor = {}
-    gMarioState.floorHeight =
-        SurfaceCollision.find_floor(gMarioState.pos[0], gMarioState.pos[1], gMarioState.pos[2], gMarioState.floor)
-
-    if (gMarioState.pos[1] < gMarioState.floorHeight) {
-        gMarioState.pos[1] = gMarioState.floorHeight
-    }
-
-    gMarioState.marioObj.gfx.pos[1] = gMarioState.pos[1]
-
-    gMarioState.action =
-        (gMarioState.pos[1] <= (gMarioState.waterLevel - 100)) ? ACT_WATER_IDLE : ACT_IDLE
-
-    Object.assign(LevelUpdate.gMarioState.marioObj.gfx, {
-        animInfo: {
-            ...LevelUpdate.gMarioState.marioObj.gfx.animInfo,
-            animID: -1,
-            animID: 0,
-            animFrame: 0,
-            animFrameAccelAssist: 0,
-            animAccel: 0x10000,
-            animTimer: 0
+        if (m.animation.targetAnim.flags & ANIM_FLAG_2) {
+            o.gfx.animInfo.animFrame = m.animation.targetAnim.unk04
+        } else {
+            if (m.animation.targetAnim.flags & ANIM_FLAG_FORWARD) {
+                o.gfx.animInfo.animFrame = m.animation.targetAnim.unk04 + 1
+            } else {
+                o.gfx.animInfo.animFrame = m.animation.targetAnim.unk04 - 1
+            }
         }
-    })
+    }
 
-    mario_reset_bodystate(gMarioState)
-    update_mario_info_for_cam(gMarioState)
-    gMarioState.marioBodyState.punchState = 0
+    return o.gfx.animInfo.animFrame
 
-    gMarioState.marioObj.oPosX = gMarioState.pos[0]
-    gMarioState.marioObj.oPosY = gMarioState.pos[1]
-    gMarioState.marioObj.oPosZ = gMarioState.pos[2]
-
-    gMarioState.marioObj.oMoveAnglePitch = gMarioState.faceAngle[0]
-    gMarioState.marioObj.oMoveAngleYaw   = gMarioState.faceAngle[1]
-    gMarioState.marioObj.oMoveAngleRoll  = gMarioState.faceAngle[2]
-
-    gMarioState.marioObj.gfx.pos = [...gMarioState.pos]
-    gMarioState.marioObj.gfx.angle = [0, gMarioState.faceAngle[1], 0]
-
-    // if (save_file_get_cap_pos(capPos)) {
-    //     capObject = spawn_object(gMarioState.marioObj, MODEL_MARIOS_CAP, bhvNormalCap);
-
-    //     capObject.oPosX = capPos[0]
-    //     capObject.oPosY = capPos[1]
-    //     capObject.oPosZ = capPos[2]
-
-    //     capObject.oForwardVelS32 = 0
-
-    //     capObject.oMoveAngleYaw = 0
-    // }
-
-    // LevelUpdate.gMarioState.marioObj.marioState = LevelUpdate.gMarioState
 }
 
-export const set_forward_vel = (m, forwardVel) => {
-    m.forwardVel = forwardVel
+export const set_mario_anim_with_accel = (m, targetAnimID, accel) => {
+    const o = m.marioObj
+    m.animation.targetAnim = m.animation.animList[targetAnimID]
 
-    m.slideVelX = m.forwardVel * Math.sin(m.faceAngle[1] / 0x8000 * Math.PI)
-    m.slideVelZ = m.forwardVel * Math.cos(m.faceAngle[1] / 0x8000 * Math.PI)
+    if (o.gfx.animInfo.animID != targetAnimID) {
+        o.gfx.animInfo.animID = targetAnimID
+        o.gfx.animInfo.curAnim = m.animation.targetAnim
+        o.gfx.animInfo.animYTrans = m.unkB0
 
-    m.vel[0] = m.slideVelX
-    m.vel[2] = m.slideVelZ
+        if (m.animation.targetAnim.flags & ANIM_FLAG_2) {
+            o.gfx.animInfo.animFrameAccelAssist = (m.animation.targetAnim << 0x10)
+        } else {
+            if (m.animation.targetAnim.flags & ANIM_FLAG_FORWARD) {
+                o.gfx.animInfo.animFrameAccelAssist = (m.animation.targetAnim << 0x10) + accel
+            } else {
+                o.gfx.animInfo.animFrameAccelAssist = (m.animation.targetAnim << 0x10) - accel
+            }
+        }
+
+        o.gfx.animInfo.animFrame = (o.gfx.animInfo.animFrameAccelAssist >> 0x10)
+    }
+
+    o.gfx.animInfo.animAccel = accel
+
+    return o.gfx.animInfo.animFrame
+
 }
 
-export const set_mario_y_vel_based_on_fspeed = (m, initialVelY, multiplier) => {
-    m.vel[1] = initialVelY + (m.forwardVel * multiplier)
+export const set_anim_to_frame = (m, animFrame) => {
+    const animInfo = m.marioObj.gfx.animInfo
+    const curAnim = animInfo.curAnim
 
-    if (m.squishTimer != 0 || m.quicksandDepth > 1.0) {
-        m.vel[1] *= 0.5
+    if (animInfo.animAccel) {
+        if (curAnim.flags & ANIM_FLAG_FORWARD) {
+            animInfo.animFrameAccelAssist = (animFrame << 0x10) + animInfo.animAccel
+        } else {
+            animInfo.animFrameAccelAssist = (animFrame << 0x10) - animInfo.animAccel
+        }
+    } else {
+        if (curAnim.flags & ANIM_FLAG_FORWARD) {
+            animInfo.animFrame = animFrame + 1
+        } else {
+            animInfo.animFrame = animFrame - 1
+        }
     }
 }
 
-const read_next_anim_value = (curFrame, attribute, values) => {
-    const index = retrieve_animation_index(curFrame, attribute)
-    const value = values[index]
-    return value > 32767 ? value - 65536 : value
+export const is_anim_past_frame = (m, animFrame) => {
+    let isPastFrame
+    const acceleratedFrame = animFrame << 0x10
+    const animInfo = m.marioObj.gfx.animInfo
+    const curAnim = animInfo.curAnim
+
+    if (animInfo.animAccel) {
+        if (curAnim.flags & ANIM_FLAG_FORWARD) {
+            isPastFrame =
+                (animInfo.animFrameAccelAssist > acceleratedFrame)
+                && (acceleratedFrame >= (animInfo.animFrameAccelAssist - animInfo.animAccel))
+        } else {
+            isPastFrame =
+                (animInfo.animFrameAccelAssist < acceleratedFrame)
+                && (acceleratedFrame <= (animInfo.animFrameAccelAssist + animInfo.animAccel))
+        }
+    } else {
+        if (curAnim.flags & ANIM_FLAG_FORWARD) {
+            isPastFrame = (animInfo.animFrame == (animFrame + 1))
+        } else {
+            isPastFrame = ((animInfo.animFrame + 1) == animFrame)
+        }
+    }
+
+    return isPastFrame
 }
 
 export const find_mario_anim_flags_and_translation = (obj, yaw, translation) => {
@@ -903,7 +934,6 @@ export const return_mario_anim_y_translation = (m) => {
     find_mario_anim_flags_and_translation(m.marioObj, 0, translation)
     return translation[1]
 }
-
 
 /**************************************************
  *                      AUDIO                     *
@@ -1035,64 +1065,295 @@ export const play_mario_sound = (m, actionSound, marioSound) => {
     }
 }
 
+/**************************************************
+ *                     ACTIONS                    *
+ **************************************************/
 
-export const check_common_action_exits = (m) => {
-    if (m.input & INPUT_A_PRESSED) {
-        return set_mario_action(m, ACT_JUMP, 0)
+/**
+ * Sets Mario's other velocities from his forward speed.
+ */
+export const mario_set_forward_vel = (m, forwardVel) => {
+    m.forwardVel = forwardVel
+
+    m.slideVelX = sins(m.faceAngle[1]) * m.forwardVel
+    m.slideVelZ = coss(m.faceAngle[1]) * m.forwardVel
+
+    m.vel[0] = m.slideVelX
+    m.vel[2] = m.slideVelZ
+}
+
+export const mario_get_floor_class = (m) => {
+    let floorClass
+
+    // The slide terrain type defaults to slide slipperiness.
+    // This doesn't matter too much since normally the slide terrain
+    // is checked for anyways.
+    if ((m.area.terrainType & SurfaceTerrains.TERRAIN_MASK) == SurfaceTerrains.TERRAIN_SLIDE) {
+        floorClass = SurfaceTerrains.SURFACE_CLASS_VERY_SLIPPERY
+    } else {
+        floorClass = SurfaceTerrains.SURFACE_CLASS_DEFAULT
     }
 
-    if (m.input & INPUT_OFF_FLOOR) {
-        return set_mario_action(m, ACT_FREEFALL, 0)
+    if (m.floor) {
+        switch (m.floor.type) {
+            case SurfaceTerrains.SURFACE_NOT_SLIPPERY:
+            case SurfaceTerrains.SURFACE_HARD_NOT_SLIPPERY:
+            case SurfaceTerrains.SURFACE_SWITCH:
+                floorClass = SurfaceTerrains.SURFACE_CLASS_NOT_SLIPPERY
+                break
+
+            case SurfaceTerrains.SURFACE_SLIPPERY:
+            case SurfaceTerrains.SURFACE_NOISE_SLIPPERY:
+            case SurfaceTerrains.SURFACE_HARD_SLIPPERY:
+            case SurfaceTerrains.SURFACE_NO_CAM_COL_SLIPPERY:
+                floorClass = SurfaceTerrains.SURFACE_CLASS_SLIPPERY
+                break
+
+            case SurfaceTerrains.SURFACE_VERY_SLIPPERY:
+            case SurfaceTerrains.SURFACE_ICE:
+            case SurfaceTerrains.SURFACE_HARD_VERY_SLIPPERY:
+            case SurfaceTerrains.SURFACE_NOISE_VERY_SLIPPERY_73:
+            case SurfaceTerrains.SURFACE_NOISE_VERY_SLIPPERY_74:
+            case SurfaceTerrains.SURFACE_NOISE_VERY_SLIPPERY:
+            case SurfaceTerrains.SURFACE_NO_CAM_COL_VERY_SLIPPERY:
+                floorClass = SurfaceTerrains.SURFACE_CLASS_VERY_SLIPPERY
+                break
+        }
     }
 
-    if (m.input & INPUT_NONZERO_ANALOG) {
-        return set_mario_action(m, ACT_WALKING, 0)
-    }
-    if (m.input & INPUT_ABOVE_SLIDE) {
-        return set_mario_action(m, ACT_BEGIN_SLIDING, 0);
+    // Crawling allows Mario to not slide on certain steeper surfaces.
+    if (m.action == ACT_CRAWLING && m.floor.normal.y > 0.5 && floorClass == SurfaceTerrains.SURFACE_CLASS_DEFAULT) {
+        floorClass = SurfaceTerrains.SURFACE_CLASS_NOT_SLIPPERY
     }
 
-    return false
+    return floorClass
 }
 
 /**
- * Checks a variety of inputs for common transitions between many different
- * object holding actions. A holding variant of the above function.
+ * Computes a value that should be added to terrain sounds before playing them.
+ * This depends on surfaces and terrain.
  */
-export const check_common_hold_action_exits = (m) => {
-    if (m.input & INPUT_A_PRESSED) {
-        return set_mario_action(m, ACT_HOLD_JUMP, 0)
-    }
-    if (m.input & INPUT_OFF_FLOOR) {
-        return set_mario_action(m, ACT_HOLD_FREEFALL, 0)
-    }
-    if (m.input & INPUT_NONZERO_ANALOG) {
-        return set_mario_action(m, ACT_HOLD_WALKING, 0)
-    }
-    if (m.input & INPUT_ABOVE_SLIDE) {
-        return set_mario_action(m, ACT_HOLD_BEGIN_SLIDING, 0)
+export const mario_get_terrain_sound_addend = (m) => {
+    let floorSoundType
+    let terrainType = m.area.terrainType & TERRAIN_MASK
+    let ret = SOUND_TERRAIN_DEFAULT << 16
+    let floorType
+
+    if (m.floor != null) {
+        floorType = m.floor.type
+
+        if ((Area.gCurrLevelNum != LEVEL_LLL) && (m.floorHeight < (m.waterLevel - 10))) {
+            // Water terrain sound, excluding LLL since it uses water in the volcano.
+            ret = SOUND_TERRAIN_WATER << 16
+        } else if (SURFACE_IS_QUICKSAND(floorType)) {
+            ret = SOUND_TERRAIN_SAND << 16
+        } else {
+            switch (floorType) {
+                default:
+                    floorSoundType = 0
+                    break
+
+                case SURFACE_NOT_SLIPPERY:
+                case SURFACE_HARD:
+                case SURFACE_HARD_NOT_SLIPPERY:
+                case SURFACE_SWITCH:
+                    floorSoundType = 1
+                    break
+
+                case SURFACE_SLIPPERY:
+                case SURFACE_HARD_SLIPPERY:
+                case SURFACE_NO_CAM_COL_SLIPPERY:
+                    floorSoundType = 2
+                    break
+
+                case SURFACE_VERY_SLIPPERY:
+                case SURFACE_ICE:
+                case SURFACE_HARD_VERY_SLIPPERY:
+                case SURFACE_NOISE_VERY_SLIPPERY_73:
+                case SURFACE_NOISE_VERY_SLIPPERY_74:
+                case SURFACE_NOISE_VERY_SLIPPERY:
+                case SURFACE_NO_CAM_COL_VERY_SLIPPERY:
+                    floorSoundType = 3
+                    break
+
+                case SURFACE_NOISE_DEFAULT:
+                    floorSoundType = 4
+                    break
+
+                case SURFACE_NOISE_SLIPPERY:
+                    floorSoundType = 5
+                    break
+            }
+
+            ret = sTerrainSounds[terrainType][floorSoundType] << 16
+        }
     }
 
-    return false
+    return ret
 }
 
-export const drop_and_set_mario_action = (m, action, actionArg) => {
-    Interact.mario_stop_riding_and_holding(m)
+export const resolve_and_return_wall_collisions = (pos, offset, radius) => {
+    const collisionData = {
+        radius,
+        offsetY: offset,
+        x: pos[0], y: pos[1], z: pos[2],
+        walls: []
+    }
 
-    return set_mario_action(m, action, actionArg)
+    let wall
+
+    if (SurfaceCollision.find_wall_collisions(collisionData)) {
+        wall = collisionData.walls[collisionData.numWalls - 1]
+    }
+
+    pos[0] = collisionData.x
+    pos[1] = collisionData.y
+    pos[2] = collisionData.z
+
+    return wall
 }
 
-export const set_jumping_action = (m, action, actionArg) => {
+export const vec3f_find_ceil = (pos, height, ceil) => {
+    return SurfaceCollision.find_ceil(pos[0], height + 80.0, pos[2], ceil);
+}
 
-    if (mario_floor_is_steep(m)) {
-        set_steep_jump_action(m)
+export const mario_facing_downhill = (m, turnYaw) => {
+    let faceAngleYaw = m.faceAngle[1];
+
+    // This is never used in practice, as turnYaw is
+    // always passed as zero.
+    if (turnYaw && m.forwardVel < 0.0) {
+        faceAngleYaw = int16(faceAngleYaw + 0x8000);
+    }
+
+    faceAngleYaw = int16(m.floorAngle - faceAngleYaw);
+
+    return (-0x4000 < faceAngleYaw) && (faceAngleYaw < 0x4000);
+}
+
+export const mario_floor_is_slippery = (m) => {
+    let normY
+
+    if ((m.area.terrainType & SurfaceTerrains.TERRAIN_MASK) == SurfaceTerrains.TERRAIN_SLIDE
+        && m.floor.normal.y < 0.9998477 //~cos(1 deg)
+    ) {
+        return true
+    }
+
+    switch (mario_get_floor_class(m)) {
+        case SurfaceTerrains.SURFACE_VERY_SLIPPERY:
+            normY = 0.9848077 //~cos(10 deg)
+            break
+
+        case SurfaceTerrains.SURFACE_SLIPPERY:
+            normY = 0.9396926 //~cos(20 deg)
+            break
+
+        default:
+            normY = 0.7880108 //~cos(38 deg)
+            break
+
+        case SurfaceTerrains.SURFACE_NOT_SLIPPERY:
+            normY = 0.0
+            break
+    }
+
+    if (m.floor) return m.floor.normal.y <= normY
+}
+
+export const mario_floor_is_slope = (m) => {
+    let normY
+
+    if ((m.area.terrainType & SurfaceTerrains.TERRAIN_MASK) == SurfaceTerrains.TERRAIN_SLIDE
+        && m.floor.normal.y < 0.9998477 //~cos(1 deg)
+    ) {
+        return true
+    }
+
+    switch (mario_get_floor_class(m)) {
+        case SurfaceTerrains.SURFACE_VERY_SLIPPERY:
+            normY = 0.9961947 //~cos(10 deg)
+            break
+
+        case SurfaceTerrains.SURFACE_SLIPPERY:
+            normY = 0.9848077 //~cos(20 deg)
+            break
+
+        default:
+            normY = 0.9659258 //~cos(38 deg)
+            break
+
+        case SurfaceTerrains.SURFACE_NOT_SLIPPERY:
+            normY = 0.9396926
+            break
+    }
+
+    if (m.floor) return m.floor.normal.y <= normY
+}
+
+export const mario_floor_is_steep = (m) => {
+    let normY
+
+    let result = false
+
+    if (!mario_facing_downhill(m, false)) {
+        switch (mario_get_floor_class(m)) {
+            case SurfaceTerrains.SURFACE_VERY_SLIPPERY:
+                normY = 0.9659258 //~cos(15 deg)
+                break
+
+            case SurfaceTerrains.SURFACE_SLIPPERY:
+                normY = 0.9396926 //~cos(20 deg)
+                break
+
+            default:
+                normY = 0.8660254 //~cos(30 deg)
+                break
+
+            case SurfaceTerrains.SURFACE_NOT_SLIPPERY:
+                normY = 0.8660254 //~cos(30 deg)
+                break
+        }
+
+        result = m.floor.normal.y <= normY
+
+    }
+
+    return result
+}
+
+export const find_floor_height_relative_polar = (m, angleFromMario, distFromMario) => {
+    const y = Math.sin(int16(m.faceAngle[1] + angleFromMario) / 0x8000 * Math.PI) * distFromMario
+    const x = Math.cos(int16(m.faceAngle[1] + angleFromMario) / 0x8000 * Math.PI) * distFromMario
+
+    return SurfaceCollision.find_floor(m.pos[0] + y, m.pos[1] + 100.0, m.pos[2] + x, {})
+}
+
+export const find_floor_slope = (m, yawOffset) => {
+    const floor = {};
+    let forwardFloorY, backwardFloorY
+    let forwardYDelta, backwardYDelta;
+    let result;
+
+    let x = Math.sin(int16(m.faceAngle[1] + yawOffset) / 0x8000 * Math.PI) * 5.0;
+    let z = Math.cos(int16(m.faceAngle[1] + yawOffset) / 0x8000 * Math.PI) * 5.0;
+
+    forwardFloorY = SurfaceCollision.find_floor(m.pos[0] + x, m.pos[1] + 100.0, m.pos[2] + z, floor);
+    backwardFloorY = SurfaceCollision.find_floor(m.pos[0] - x, m.pos[1] + 100.0, m.pos[2] - z, floor);
+
+    //! If Mario is near OOB, these floorY's can sometimes be -11000.
+    //  This will cause these to be off and give improper slopes.
+    forwardYDelta = forwardFloorY - m.pos[1];
+    backwardYDelta = m.pos[1] - backwardFloorY;
+
+    if (forwardYDelta * forwardYDelta < backwardYDelta * backwardYDelta) {
+        result = atan2s(5.0, forwardYDelta);
     } else {
-        set_mario_action(m, action, actionArg)
+        result = atan2s(5.0, backwardYDelta);
     }
 
-    return true
+    return result;
 }
-
 
 export const update_mario_sound_and_camera = (m) => {
     let action = m.action
@@ -1114,8 +1375,7 @@ export const update_mario_sound_and_camera = (m) => {
     }
 }
 
-
-const set_steep_jump_action = (m) => {
+export const set_steep_jump_action = (m) => {
     m.marioObj.rawData[oMarioSteepJumpYaw] = m.faceAngle[1]
 
     if (m.forwardVel > 0.0) {
@@ -1133,58 +1393,12 @@ const set_steep_jump_action = (m) => {
     drop_and_set_mario_action(m, ACT_STEEP_JUMP, 0)
 }
 
-export const set_jump_from_landing = (m) => {
-    if (m.quicksandDepth >= 11.0) {
-        if (!m.heldObj) {
-            return set_mario_action(m, ACT_QUICKSAND_JUMP_LAND, 0)
-        } else {
-            return set_mario_action(m, ACT_HOLD_QUICKSAND_JUMP_LAND, 0)
-        }
+export const set_mario_y_vel_based_on_fspeed = (m, initialVelY, multiplier) => {
+    m.vel[1] = initialVelY + (m.forwardVel * multiplier)
+
+    if (m.squishTimer != 0 || m.quicksandDepth > 1.0) {
+        m.vel[1] *= 0.5
     }
-
-    if (mario_floor_is_steep(m)) {
-        set_steep_jump_action(m)
-    } else {
-        if (m.doubleJumpTimer == 0 || m.squishTimer != 0) {
-            set_mario_action(m, ACT_JUMP, 0)
-        } else {
-            switch (m.prevAction) {
-                case ACT_JUMP_LAND:
-                  set_mario_action(m, ACT_DOUBLE_JUMP, 0)
-                  break
-
-                case ACT_FREEFALL_LAND:
-                  set_mario_action(m, ACT_DOUBLE_JUMP, 0)
-                  break
-
-                case ACT_SIDE_FLIP_LAND_STOP:
-                  set_mario_action(m, ACT_DOUBLE_JUMP, 0)
-                  break
-
-                case ACT_DOUBLE_JUMP_LAND:
-                    // If Mario has a wing cap, he ignores the typical speed
-                    // requirement for a triple jump.
-                    if (m.flags & MARIO_WING_CAP) {
-                        set_mario_action(m, ACT_FLYING_TRIPLE_JUMP, 0)
-                    } else if (m.forwardVel > 20.0) {
-                        set_mario_action(m, ACT_TRIPLE_JUMP, 0)
-                    } else {
-                        set_mario_action(m, ACT_JUMP, 0)
-                    }
-                    break
-
-                default:
-                  set_mario_action(m, ACT_JUMP, 0)
-                  break
-            }
-        }
-
-    } 
-
-
-    m.doubleJumpTimer = 0
-
-    return true
 }
 
 /**
@@ -1353,7 +1567,6 @@ export const set_mario_action_moving = (m, action, actionArg) => {
     return action
 }
 
-
 /**
  * Transition for certain submerged actions, which is actually just the metal jump actions.
  */
@@ -1429,118 +1642,379 @@ export const set_mario_action = (m, action, actionArg) => {
     return true
 }
 
-export const set_mario_animation = (m, targetAnimID) => {
-    const o = m.marioObj
-    m.animation.targetAnim = m.animation.animList[targetAnimID]
-
-    if (m.animation.targetAnim == undefined) throw "cant find animation"
-
-    if (o.gfx.animInfo.animID != targetAnimID) {
-        o.gfx.animInfo.animID = targetAnimID
-        o.gfx.animInfo.curAnim = m.animation.targetAnim
-        o.gfx.animInfo.animAccel = 0
-        o.gfx.animInfo.animYTrans = m.unkB0
-
-        if (m.animation.targetAnim.flags & ANIM_FLAG_2) {
-            o.gfx.animInfo.animFrame = m.animation.targetAnim.unk04
+export const set_jump_from_landing = (m) => {
+    if (m.quicksandDepth >= 11.0) {
+        if (!m.heldObj) {
+            return set_mario_action(m, ACT_QUICKSAND_JUMP_LAND, 0)
         } else {
-            if (m.animation.targetAnim.flags & ANIM_FLAG_FORWARD) {
-                o.gfx.animInfo.animFrame = m.animation.targetAnim.unk04 + 1
-            } else {
-                o.gfx.animInfo.animFrame = m.animation.targetAnim.unk04 - 1
+            return set_mario_action(m, ACT_HOLD_QUICKSAND_JUMP_LAND, 0)
+        }
+    }
+
+    if (mario_floor_is_steep(m)) {
+        set_steep_jump_action(m)
+    } else {
+        if (m.doubleJumpTimer == 0 || m.squishTimer != 0) {
+            set_mario_action(m, ACT_JUMP, 0)
+        } else {
+            switch (m.prevAction) {
+                case ACT_JUMP_LAND:
+                  set_mario_action(m, ACT_DOUBLE_JUMP, 0)
+                  break
+
+                case ACT_FREEFALL_LAND:
+                  set_mario_action(m, ACT_DOUBLE_JUMP, 0)
+                  break
+
+                case ACT_SIDE_FLIP_LAND_STOP:
+                  set_mario_action(m, ACT_DOUBLE_JUMP, 0)
+                  break
+
+                case ACT_DOUBLE_JUMP_LAND:
+                    // If Mario has a wing cap, he ignores the typical speed
+                    // requirement for a triple jump.
+                    if (m.flags & MARIO_WING_CAP) {
+                        set_mario_action(m, ACT_FLYING_TRIPLE_JUMP, 0)
+                    } else if (m.forwardVel > 20.0) {
+                        set_mario_action(m, ACT_TRIPLE_JUMP, 0)
+                    } else {
+                        set_mario_action(m, ACT_JUMP, 0)
+                    }
+                    break
+
+                default:
+                  set_mario_action(m, ACT_JUMP, 0)
+                  break
+            }
+        }
+
+    } 
+
+
+    m.doubleJumpTimer = 0
+
+    return true
+}
+
+export const set_jumping_action = (m, action, actionArg) => {
+
+    if (mario_floor_is_steep(m)) {
+        set_steep_jump_action(m)
+    } else {
+        set_mario_action(m, action, actionArg)
+    }
+
+    return true
+}
+
+export const drop_and_set_mario_action = (m, action, actionArg) => {
+    Interact.mario_stop_riding_and_holding(m)
+
+    return set_mario_action(m, action, actionArg)
+}
+
+export const hurt_and_set_mario_action = (m, action, actionArg, hurtCounter) => {
+    m.hurtCounter = hurtCounter;
+
+    return set_mario_action(m, action, actionArg);
+}
+
+export const check_common_action_exits = (m) => {
+    if (m.input & INPUT_A_PRESSED) {
+        return set_mario_action(m, ACT_JUMP, 0)
+    }
+
+    if (m.input & INPUT_OFF_FLOOR) {
+        return set_mario_action(m, ACT_FREEFALL, 0)
+    }
+
+    if (m.input & INPUT_NONZERO_ANALOG) {
+        return set_mario_action(m, ACT_WALKING, 0)
+    }
+    if (m.input & INPUT_ABOVE_SLIDE) {
+        return set_mario_action(m, ACT_BEGIN_SLIDING, 0);
+    }
+
+    return false
+}
+
+/**
+ * Checks a variety of inputs for common transitions between many different
+ * object holding actions. A holding variant of the above function.
+ */
+export const check_common_hold_action_exits = (m) => {
+    if (m.input & INPUT_A_PRESSED) {
+        return set_mario_action(m, ACT_HOLD_JUMP, 0)
+    }
+    if (m.input & INPUT_OFF_FLOOR) {
+        return set_mario_action(m, ACT_HOLD_FREEFALL, 0)
+    }
+    if (m.input & INPUT_NONZERO_ANALOG) {
+        return set_mario_action(m, ACT_HOLD_WALKING, 0)
+    }
+    if (m.input & INPUT_ABOVE_SLIDE) {
+        return set_mario_action(m, ACT_HOLD_BEGIN_SLIDING, 0)
+    }
+
+    return false
+}
+
+export const transition_submerged_to_walking = m => {
+    Camera.set_camera_mode(m.area.camera, m.area.camera.defMode, 1)
+
+    m.angleVel = [0, 0, 0]
+
+    if (m.heldObj == null) {
+        return set_mario_action(m, ACT_WALKING, 0)
+    } else {
+        return set_mario_action(m, ACT_HOLD_WALKING, 0)
+    }
+}
+
+export const set_water_plunge_action = m => {
+    m.forwardVel = m.forwardVel / 4
+    m.vel[1] = m.vel[1] / 2
+
+    m.pos[1] = m.waterLevel - 100
+
+    m.faceAngle[2] = 0
+
+    vec3s_set(m.angleVel, 0, 0, 0)
+
+    if (!(m.action & ACT_FLAG_DIVING)) {
+        m.faceAngle[0] = 0
+    }
+
+    if (m.area.camera.mode != CAMERA_MODE_WATER_SURFACE) {
+        Camera.set_camera_mode(m.area.camera, CAMERA_MODE_WATER_SURFACE, 1)
+    }
+
+  return set_mario_action(m, ACT_WATER_PLUNGE, 0)
+}
+
+/**
+ * Applies the squish to Mario's model via scaling.
+ */
+export const squish_mario_model = (m) => {
+    if (m.squishTimer != 0xFF) {
+          // If no longer squished, scale back to default.
+        if (m.squishTimer == 0) {
+            vec3f_set(m.marioObj.gfx.scale, 1.0, 1.0, 1.0)
+        }
+          // If timer is less than 16, rubber-band Mario's size scale up and down.
+        else if (m.squishTimer <= 16) {
+            m.squishTimer -= 1
+
+            m.marioObj.gfx.scale[1] =
+                1.0 - ((sSquishScaleOverTime[15 - m.squishTimer] * 0.6) / 100.0)
+            m.marioObj.gfx.scale[0] =
+                ((sSquishScaleOverTime[15 - m.squishTimer] * 0.4) / 100.0) + 1.0
+
+            m.marioObj.gfx.scale[2] = m.marioObj.gfx.scale[0]
+        } else {
+            m.squishTimer -= 1
+
+            vec3f_set(m.marioObj.gfx.scale, 1.4, 0.4, 1.4)
+        }
+    }
+}
+
+export const update_mario_button_inputs = (m, playerInput) => {
+    if (playerInput.buttonPressedA) m.input |= INPUT_A_PRESSED
+    if (playerInput.buttonDownA) m.input |= INPUT_A_DOWN
+    if (playerInput.buttonPressedB) m.input |= INPUT_B_PRESSED
+    if (playerInput.buttonPressedZ) m.input |=  INPUT_Z_PRESSED
+    if (playerInput.buttonDownZ) m.input |=  INPUT_Z_DOWN
+}
+
+export const update_mario_joystick_inputs = (m, playerInput) => {
+    const mag = playerInput.stickMag
+
+    m.intendedMag = mag / 2.0
+
+    if (m.intendedMag > 0.0) {
+        m.intendedYaw = atan2s(-playerInput.stickY, playerInput.stickX) + m.area.camera.yaw
+        m.input |= INPUT_NONZERO_ANALOG
+    } else {
+        m.intendedYaw = m.faceAngle[1]
+    }
+
+    m.controller = { stickX: playerInput.stickX, stickY: playerInput.stickY, stickMag: playerInput.stickMag }
+
+    m.intendedYaw = m.intendedYaw > 32767 ? m.intendedYaw - 65536 : m.intendedYaw
+    m.intendedYaw = m.intendedYaw < -32768 ? m.intendedYaw + 65536 : m.intendedYaw
+}
+
+export const update_mario_geometry_inputs = (m) => {
+    m.floorHeight = SurfaceCollision.find_floor(m.pos[0], m.pos[1], m.pos[2], m)
+
+    if (!m.floor) {
+        m.pos = [ ...m.marioObj.gfx.pos ]
+        m.floorHeight = SurfaceCollision.find_floor(m.pos[0], m.pos[1], m.pos[2], m)
+    }
+
+    m.ceilHeight = vec3f_find_ceil(m.pos, m.floorHeight, m)
+    let gasLevel = SurfaceCollision.find_poison_gas_level(m.pos[0], m.pos[2])
+    m.waterLevel = SurfaceCollision.find_water_level(m.pos[0], m.pos[2])
+
+    if (m.floor) {
+        if (!m.floor.normal) throw "normal missing"
+        m.floorAngle = atan2s(m.floor.normal.z, m.floor.normal.x)
+
+        if ((m.pos[1] > m.waterLevel - 40) && mario_floor_is_slippery(m)) {
+            m.input |= INPUT_ABOVE_SLIDE
+        }
+
+        if ((m.floor.flags & SurfaceTerrains.SURFACE_FLAG_DYNAMIC)
+            || (m.ceil && m.ceil.flags & SurfaceTerrains.SURFACE_FLAG_DYNAMIC)) {
+            let ceilToFloorDist = m.ceilHeight - m.floorHeight
+
+            if ((0.0 <= ceilToFloorDist) && (ceilToFloorDist <= 150.0)) {
+                m.input |= INPUT_SQUISHED
+            }
+        }
+
+        if (m.pos[1] > m.floorHeight + 100.0) {
+            m.input |= INPUT_OFF_FLOOR
+        }
+
+        if (m.pos[1] < (m.waterLevel - 10)) {
+            m.input |= INPUT_IN_WATER
+        }
+
+        if (m.pos[1] < (gasLevel - 100.0)) {
+            m.input |= INPUT_IN_POISON_GAS
+        }
+
+    } else {
+        level_trigger_warp(m, WARP_OP_DEATH)
+    }
+
+}
+
+export const update_mario_inputs = (m) => {
+    m.particleFlags = 0
+    m.input = 0
+    m.collidedObjInteractTypes = m.marioObj.collidedObjInteractTypes
+    m.flags &= 0xFFFFFF
+
+    update_mario_joystick_inputs(m, window.playerInput)
+    update_mario_button_inputs(m, window.playerInput)
+    update_mario_geometry_inputs(m)
+
+    if (Camera.gCameraMovementFlags & Camera.CAM_MOVE_C_UP_MODE) {
+        if (m.action & ACT_FLAG_ALLOW_FIRST_PERSON) {
+            m.input |= INPUT_FIRST_PERSON;
+        } else {
+            Camera.gCameraMovementFlags &= ~Camera.CAM_MOVE_C_UP_MODE;
+        }
+    }
+
+    if (!(m.input & (INPUT_NONZERO_ANALOG | INPUT_A_PRESSED))) {
+        m.input |= INPUT_UNKNOWN_5;
+    }
+
+    if (m.marioObj.rawData[oInteractStatus]
+        & (Interact.INT_STATUS_HOOT_GRABBED_BY_MARIO | Interact.INT_STATUS_MARIO_UNK1 | Interact.INT_STATUS_MARIO_UNK4)) {
+        m.input |= INPUT_STOMPED
+    }
+
+    if (m.wallKickTimer > 0) {
+        m.wallKickTimer--
+    }
+
+    if (m.doubleJumpTimer > 0) {
+        m.doubleJumpTimer--
+    }
+}
+
+export const set_submerged_cam_preset_and_spawn_bubbles = (m) => {
+
+    if ((m.action & ACT_GROUP_MASK) == ACT_GROUP_SUBMERGED) {
+        const heightBelowWater = (m.waterLevel - 80) - m.pos[1]
+        const camPreset = m.area.camera.mode
+
+        if (m.action & ACT_FLAG_METAL_WATER) {
+            if (camPreset != CAMERA_MODE_CLOSE) {
+                Camera.set_camera_mode(m.area.camera, CAMERA_MODE_CLOSE, 1);
+            }
+        } else {
+            if ((heightBelowWater > 800) && (camPreset != CAMERA_MODE_BEHIND_MARIO)) {
+                Camera.set_camera_mode(m.area.camera, CAMERA_MODE_BEHIND_MARIO, 1)
+            }
+
+            if ((heightBelowWater < 400) && (camPreset != CAMERA_MODE_WATER_SURFACE)) {
+                Camera.set_camera_mode(m.area.camera, CAMERA_MODE_WATER_SURFACE, 1)
+            }
+
+            // As long as Mario isn't drowning or at the top
+            // of the water with his head out, spawn bubbles.
+            if ((m.action & ACT_FLAG_INTANGIBLE) == 0) {
+                if ((m.pos[1] < (m.waterLevel - 160)) || (m.faceAngle[0] < -0x800)) {
+                    m.particleFlags |= MarioConstants.PARTICLE_BUBBLE
+                }
             }
         }
     }
-
-    return o.gfx.animInfo.animFrame
-
 }
 
-export const set_mario_anim_with_accel = (m, targetAnimID, accel) => {
-    const o = m.marioObj
-    m.animation.targetAnim = m.animation.animList[targetAnimID]
-
-    if (o.gfx.animInfo.animID != targetAnimID) {
-        o.gfx.animInfo.animID = targetAnimID
-        o.gfx.animInfo.curAnim = m.animation.targetAnim
-        o.gfx.animInfo.animYTrans = m.unkB0
-
-        if (m.animation.targetAnim.flags & ANIM_FLAG_2) {
-            o.gfx.animInfo.animFrameAccelAssist = (m.animation.targetAnim << 0x10)
-        } else {
-            if (m.animation.targetAnim.flags & ANIM_FLAG_FORWARD) {
-                o.gfx.animInfo.animFrameAccelAssist = (m.animation.targetAnim << 0x10) + accel
+export const update_mario_health = (m) => {
+    if (m.health >= 0x100) {
+        // When already healing or hurting Mario, Mario's HP is not changed any more here.
+        if ((m.healCounter | m.hurtCounter) == 0) {
+            if ((m.input & INPUT_IN_POISON_GAS) && !(m.action & ACT_FLAG_INTANGIBLE)) {
+                if (!(m.flags & MARIO_METAL_CAP)) {
+                    m.health -= 4
+                }
             } else {
-                o.gfx.animInfo.animFrameAccelAssist = (m.animation.targetAnim << 0x10) - accel
+                if ((m.action & ACT_FLAG_SWIMMING) && ((m.action & ACT_FLAG_INTANGIBLE) == 0)) {
+                    const terrainIsSnow = (m.area.terrainType & SurfaceTerrains.TERRAIN_MASK) == SurfaceTerrains.TERRAIN_SNOW
+
+                    // When Mario is near the water surface, recover health (unless in snow),
+                    // when in snow terrains lose 3 health.
+                    // If using the debug level select, do not lose any HP to water.
+                    if ((m.pos[1] >= (m.waterLevel - 140)) && !terrainIsSnow) {
+                        m.health += 0x1A
+                    } else  {
+                        m.health -= (terrainIsSnow ? 3 : 1)
+                    }
+                }
             }
         }
 
-        o.gfx.animInfo.animFrame = (o.gfx.animInfo.animFrameAccelAssist >> 0x10)
-    }
-
-    o.gfx.animInfo.animAccel = accel
-
-    return o.gfx.animInfo.animFrame
-
-}
-
-export const set_anim_to_frame = (m, animFrame) => {
-    const animInfo = m.marioObj.gfx.animInfo
-    const curAnim = animInfo.curAnim
-
-    if (animInfo.animAccel) {
-        if (curAnim.flags & ANIM_FLAG_FORWARD) {
-            animInfo.animFrameAccelAssist = (animFrame << 0x10) + animInfo.animAccel
-        } else {
-            animInfo.animFrameAccelAssist = (animFrame << 0x10) - animInfo.animAccel
+        if (m.healCounter > 0) {
+            m.health += 0x40
+            m.healCounter--
         }
-    } else {
-        if (curAnim.flags & ANIM_FLAG_FORWARD) {
-            animInfo.animFrame = animFrame + 1
-        } else {
-            animInfo.animFrame = animFrame - 1
+        if (m.hurtCounter > 0) {
+            m.health -= 0x40
+            m.hurtCounter--
         }
+
+        if (m.health >= 0x881) {
+            m.health = 0x880
+        }
+        if (m.health < 0x100) {
+            m.health = 0xFF
+        }
+
+
+        // TODO // Play a noise to alert the player when Mario is close to drowning.
     }
 }
 
-export const is_anim_at_end = (m) => {
-    const o = m.marioObj //TODO fix animInfo as animInfo
-    return (o.gfx.animInfo.animFrame + 1) == o.gfx.animInfo.curAnim.unk08
-}
+export const update_mario_info_for_cam = (m) => {
+    m.marioBodyState.action = m.action
+    m.statusForCamera.action = m.action
 
-export const is_anim_past_end = (m) => {
-    const o = m.marioObj
-    return o.gfx.animInfo.animFrame >= (o.gfx.animInfo.curAnim.unk08 - 2)
-}
+    m.statusForCamera.faceAngle = [...m.faceAngle]
 
-export const is_anim_past_frame = (m, animFrame) => {
-    let isPastFrame
-    const acceleratedFrame = animFrame << 0x10
-    const animInfo = m.marioObj.gfx.animInfo
-    const curAnim = animInfo.curAnim
-
-    if (animInfo.animAccel) {
-        if (curAnim.flags & ANIM_FLAG_FORWARD) {
-            isPastFrame =
-                (animInfo.animFrameAccelAssist > acceleratedFrame)
-                && (acceleratedFrame >= (animInfo.animFrameAccelAssist - animInfo.animAccel))
-        } else {
-            isPastFrame =
-                (animInfo.animFrameAccelAssist < acceleratedFrame)
-                && (acceleratedFrame <= (animInfo.animFrameAccelAssist + animInfo.animAccel))
-        }
-    } else {
-        if (curAnim.flags & ANIM_FLAG_FORWARD) {
-            isPastFrame = (animInfo.animFrame == (animFrame + 1))
-        } else {
-            isPastFrame = ((animInfo.animFrame + 1) == animFrame)
-        }
+    if ((m.flags & MARIO_UNKNOWN_25) == 0) {
+        m.statusForCamera.pos = [...m.pos]
     }
-
-    return isPastFrame
 }
 
-const mario_reset_bodystate = (m) => {
+export const mario_reset_bodystate = (m) => {
     const bodyState = m.marioBodyState
 
     bodyState.capState = 1
@@ -1552,95 +2026,18 @@ const mario_reset_bodystate = (m) => {
     m.flags &= ~MARIO_METAL_SHOCK
 }
 
-export const execute_mario_action = () => {
-    if (LevelUpdate.gMarioState.action) {
-        LevelUpdate.gMarioState.marioObj.gfx.flags &= ~GRAPH_RENDER_INVISIBLE
-        mario_reset_bodystate(LevelUpdate.gMarioState)
-        update_mario_inputs(LevelUpdate.gMarioState)
-        Interact.mario_handle_special_floors(LevelUpdate.gMarioState)
-        Interact.mario_process_interactions(LevelUpdate.gMarioState)
+export const sink_mario_in_quicksand = (m) => {
+    const o = m.marioObj;
 
-        let inLoop = 1
+    if (o.gfx.throwMatrix) o.gfx.throwMatrix[3][1] -= m.quicksandDepth
 
-        while (inLoop) {
-            switch (LevelUpdate.gMarioState.action & ACT_GROUP_MASK) {
-                case ACT_GROUP_STATIONARY:
-                    inLoop = mario_execute_stationary_action(LevelUpdate.gMarioState)
-                    break
-
-                case ACT_GROUP_MOVING:
-                    inLoop = mario_execute_moving_action(LevelUpdate.gMarioState)
-                    break
-
-                case ACT_GROUP_AIRBORNE:
-                    inLoop = mario_execute_airborne_action(LevelUpdate.gMarioState)
-                    break
-
-                case ACT_GROUP_SUBMERGED:
-                    inLoop = mario_execute_submerged_action(LevelUpdate.gMarioState)
-                    break
-
-                case ACT_GROUP_CUTSCENE:
-                    inLoop = mario_execute_cutscene_action(LevelUpdate.gMarioState)
-                    break
-
-                case ACT_GROUP_AUTOMATIC:
-                    inLoop = mario_execute_automatic_action(LevelUpdate.gMarioState)
-                    break
-
-                case ACT_GROUP_OBJECT:
-                    inLoop = mario_execute_object_action(LevelUpdate.gMarioState)
-                    break
-
-                default: throw "unkown action group"
-            }
-        }
-
-        // sink_mario_in_quicksand(LevelUpdate.gMarioState)
-        squish_mario_model(LevelUpdate.gMarioState)
-        set_submerged_cam_preset_and_spawn_bubbles(LevelUpdate.gMarioState)
-        update_mario_health(LevelUpdate.gMarioState)
-        update_mario_info_for_cam(LevelUpdate.gMarioState)
-        mario_update_hitbox_and_cap_model(LevelUpdate.gMarioState)
-
-        if (LevelUpdate.gMarioState.floor) {
-            if (LevelUpdate.gMarioState.floor.type == SurfaceTerrains.SURFACE_HORIZONTAL_WIND) {
-                // spawn_wind_particles(0, (LevelUpdate.gMarioState.floor.force << 8))
-                play_sound(SOUND_ENV_WIND2, LevelUpdate.gMarioState.marioObj.gfx.cameraToObject)
-            }
-        }
-
-        if (LevelUpdate.gMarioState.floor) {
-            if (LevelUpdate.gMarioState.floor.type == SurfaceTerrains.SURFACE_VERTICAL_WIND) {
-                // spawn_wind_particles(1, 0)
-                play_sound(SOUND_ENV_WIND2, LevelUpdate.gMarioState.marioObj.gfx.cameraToObject);
-            }
-        }
-
-        play_infinite_stairs_music()
-
-        LevelUpdate.gMarioState.marioObj.rawData[oInteractStatus] = 0
-
-        return LevelUpdate.gMarioState.particleFlags
-    }
-
-    return false
+    o.gfx.pos[1] -= m.quicksandDepth
 }
-
-
-/**
- * Is a binary representation of the frames to flicker Mario's cap when the timer
- * is running out.
- *
- * Equals [1000]^5 . [100]^8 . [10]^9 . [1] in binary, which is
- * 100010001000100010001001001001001001001001001010101010101010101.
- */
-const sCapFlickerFrames = 0x4444449249255555
 
 /**
  * Updates the cap flags mainly based on the cap timer.
  */
-const update_and_return_cap_flags = (m) => {
+export const update_and_return_cap_flags = (m) => {
     let /*u32*/ flags = m.flags
     let /*u32*/ action
 
@@ -1738,509 +2135,183 @@ const mario_update_hitbox_and_cap_model = (m) => {
     }
 }
 
-const update_mario_health = (m) => {
-    if (m.health >= 0x100) {
-        // When already healing or hurting Mario, Mario's HP is not changed any more here.
-        if ((m.healCounter | m.hurtCounter) == 0) {
-            if ((m.input & INPUT_IN_POISON_GAS) && !(m.action & ACT_FLAG_INTANGIBLE)) {
-                if (!(m.flags & MARIO_METAL_CAP)) {
-                    m.health -= 4
-                }
-            } else {
-                if ((m.action & ACT_FLAG_SWIMMING) && ((m.action & ACT_FLAG_INTANGIBLE) == 0)) {
-                    const terrainIsSnow = (m.area.terrainType & SurfaceTerrains.TERRAIN_MASK) == SurfaceTerrains.TERRAIN_SNOW
+export const execute_mario_action = () => {
+    if (LevelUpdate.gMarioState.action) {
+        LevelUpdate.gMarioState.marioObj.gfx.flags &= ~GRAPH_RENDER_INVISIBLE
+        mario_reset_bodystate(LevelUpdate.gMarioState)
+        update_mario_inputs(LevelUpdate.gMarioState)
+        Interact.mario_handle_special_floors(LevelUpdate.gMarioState)
+        Interact.mario_process_interactions(LevelUpdate.gMarioState)
 
-                    // When Mario is near the water surface, recover health (unless in snow),
-                    // when in snow terrains lose 3 health.
-                    // If using the debug level select, do not lose any HP to water.
-                    if ((m.pos[1] >= (m.waterLevel - 140)) && !terrainIsSnow) {
-                        m.health += 0x1A
-                    } else  {
-                        m.health -= (terrainIsSnow ? 3 : 1)
-                    }
-                }
+        let inLoop = 1
+
+        while (inLoop) {
+            switch (LevelUpdate.gMarioState.action & ACT_GROUP_MASK) {
+                case ACT_GROUP_STATIONARY:
+                    inLoop = mario_execute_stationary_action(LevelUpdate.gMarioState)
+                    break
+
+                case ACT_GROUP_MOVING:
+                    inLoop = mario_execute_moving_action(LevelUpdate.gMarioState)
+                    break
+
+                case ACT_GROUP_AIRBORNE:
+                    inLoop = mario_execute_airborne_action(LevelUpdate.gMarioState)
+                    break
+
+                case ACT_GROUP_SUBMERGED:
+                    inLoop = mario_execute_submerged_action(LevelUpdate.gMarioState)
+                    break
+
+                case ACT_GROUP_CUTSCENE:
+                    inLoop = mario_execute_cutscene_action(LevelUpdate.gMarioState)
+                    break
+
+                case ACT_GROUP_AUTOMATIC:
+                    inLoop = mario_execute_automatic_action(LevelUpdate.gMarioState)
+                    break
+
+                case ACT_GROUP_OBJECT:
+                    inLoop = mario_execute_object_action(LevelUpdate.gMarioState)
+                    break
+
+                default: throw "unkown action group"
             }
         }
 
-        if (m.healCounter > 0) {
-            m.health += 0x40
-            m.healCounter--
-        }
-        if (m.hurtCounter > 0) {
-            m.health -= 0x40
-            m.hurtCounter--
+        sink_mario_in_quicksand(LevelUpdate.gMarioState)
+        squish_mario_model(LevelUpdate.gMarioState)
+        set_submerged_cam_preset_and_spawn_bubbles(LevelUpdate.gMarioState)
+        update_mario_health(LevelUpdate.gMarioState)
+        update_mario_info_for_cam(LevelUpdate.gMarioState)
+        mario_update_hitbox_and_cap_model(LevelUpdate.gMarioState)
+
+        if (LevelUpdate.gMarioState.floor) {
+            if (LevelUpdate.gMarioState.floor.type == SurfaceTerrains.SURFACE_HORIZONTAL_WIND) {
+                // spawn_wind_particles(0, (LevelUpdate.gMarioState.floor.force << 8))
+                play_sound(SOUND_ENV_WIND2, LevelUpdate.gMarioState.marioObj.gfx.cameraToObject)
+            }
         }
 
-        if (m.health >= 0x881) {
-            m.health = 0x880
-        }
-        if (m.health < 0x100) {
-            m.health = 0xFF
+        if (LevelUpdate.gMarioState.floor) {
+            if (LevelUpdate.gMarioState.floor.type == SurfaceTerrains.SURFACE_VERTICAL_WIND) {
+                // spawn_wind_particles(1, 0)
+                play_sound(SOUND_ENV_WIND2, LevelUpdate.gMarioState.marioObj.gfx.cameraToObject);
+            }
         }
 
+        play_infinite_stairs_music()
 
-        // TODO // Play a noise to alert the player when Mario is close to drowning.
+        LevelUpdate.gMarioState.marioObj.rawData[oInteractStatus] = 0
+
+        return LevelUpdate.gMarioState.particleFlags
     }
+
+    return 0;
 }
 
-const update_mario_button_inputs = (m, playerInput) => {
-    if (playerInput.buttonPressedA) m.input |= INPUT_A_PRESSED
-    if (playerInput.buttonDownA) m.input |= INPUT_A_DOWN
-    if (playerInput.buttonPressedB) m.input |= INPUT_B_PRESSED
-    if (playerInput.buttonPressedZ) m.input |=  INPUT_Z_PRESSED
-    if (playerInput.buttonDownZ) m.input |=  INPUT_Z_DOWN
-}
+export const init_marios = () => {
+    const gMarioState = LevelUpdate.gMarioState
+    const gMarioSpawnInfo = Area.gMarioSpawnInfo
 
-const update_mario_joystick_inputs = (m, playerInput) => {
-    const mag = playerInput.stickMag
+    gMarioState.actionTimer = 0
+    gMarioState.framesSinceA = 0xFF
+    gMarioState.framesSinceB = 0xFF
 
-    m.intendedMag = mag / 2.0
+    gMarioState.invincTimer = 0
 
-    if (m.intendedMag > 0.0) {
-        m.intendedYaw = atan2s(-playerInput.stickY, playerInput.stickX) + m.area.camera.yaw
-        m.input |= INPUT_NONZERO_ANALOG
+    if (save_file_clear_flags() & (SAVE_FLAG_CAP_ON_GROUND | SAVE_FLAG_CAP_ON_KLEPTO | SAVE_FLAG_CAP_ON_UKIKI | SAVE_FLAG_CAP_ON_MR_BLIZZARD)) {
+        gMarioState.flags = 0;
     } else {
-        m.intendedYaw = m.faceAngle[1]
+        gMarioState.flags = MARIO_CAP_ON_HEAD | MARIO_NORMAL_CAP;
     }
 
-    m.controller = { stickX: playerInput.stickX, stickY: playerInput.stickY, stickMag: playerInput.stickMag }
+    gMarioState.forwardVel = 0.0
+    gMarioState.squishTimer = 0
 
-    m.intendedYaw = m.intendedYaw > 32767 ? m.intendedYaw - 65536 : m.intendedYaw
-    m.intendedYaw = m.intendedYaw < -32768 ? m.intendedYaw + 65536 : m.intendedYaw
-}
+    gMarioState.hurtCounter = 0
+    gMarioState.healCounter = 0
 
-const update_mario_geometry_inputs = (m) => {
-    m.floorHeight = SurfaceCollision.find_floor(m.pos[0], m.pos[1], m.pos[2], m)
+    gMarioState.capTimer = 0
+    gMarioState.quicksandDepth = 0.0
 
-    if (!m.floor) {
-        m.pos = [ ...m.marioObj.gfx.pos ]
-        m.floorHeight = SurfaceCollision.find_floor(m.pos[0], m.pos[1], m.pos[2], m)
+    gMarioState.heldObj = null
+    gMarioState.riddenObj = null
+    gMarioState.usedObj = null
+
+    gMarioState.waterLevel =
+        SurfaceCollision.find_water_level(gMarioSpawnInfo.startPos[0], gMarioSpawnInfo.startPos[2])
+
+    gMarioState.area = Area.gCurrentArea
+    gMarioState.marioObj = gLinker.ObjectListProcessor.gMarioObject
+    gMarioState.marioObj.gfx.animInfo.animID = -1
+    gMarioState.faceAngle = [...Area.gMarioSpawnInfo.startAngle]
+    gMarioState.angleVel = [0, 0, 0]
+    gMarioState.pos = [...Area.gMarioSpawnInfo.startPos]
+    // gMarioState.slideYaw = 0
+    gMarioState.vel = [0, 0, 0]
+
+    gMarioState.floor = {}
+    gMarioState.floorHeight =
+        SurfaceCollision.find_floor(gMarioState.pos[0], gMarioState.pos[1], gMarioState.pos[2], gMarioState.floor)
+
+    if (gMarioState.pos[1] < gMarioState.floorHeight) {
+        gMarioState.pos[1] = gMarioState.floorHeight
     }
 
-    m.ceilHeight = vec3_find_ceil(m.pos, m.floorHeight, m)
-    let gasLevel = SurfaceCollision.find_poison_gas_level(m.pos[0], m.pos[2])
-    m.waterLevel = SurfaceCollision.find_water_level(m.pos[0], m.pos[2])
+    gMarioState.marioObj.gfx.pos[1] = gMarioState.pos[1]
 
-    if (m.floor) {
-        if (!m.floor.normal) throw "normal missing"
-        m.floorAngle = atan2s(m.floor.normal.z, m.floor.normal.x)
+    gMarioState.action =
+        (gMarioState.pos[1] <= (gMarioState.waterLevel - 100)) ? ACT_WATER_IDLE : ACT_IDLE
 
-        if ((m.pos[1] > m.waterLevel - 40) && mario_floor_is_slippery(m)) {
-            m.input |= INPUT_ABOVE_SLIDE
+    Object.assign(LevelUpdate.gMarioState.marioObj.gfx, {
+        animInfo: {
+            ...LevelUpdate.gMarioState.marioObj.gfx.animInfo,
+            animID: -1,
+            animID: 0,
+            animFrame: 0,
+            animFrameAccelAssist: 0,
+            animAccel: 0x10000,
+            animTimer: 0
         }
+    })
 
-        if ((m.floor.flags & SurfaceTerrains.SURFACE_FLAG_DYNAMIC)
-            || (m.ceil && m.ceil.flags & SurfaceTerrains.SURFACE_FLAG_DYNAMIC)) {
-            let ceilToFloorDist = m.ceilHeight - m.floorHeight
+    mario_reset_bodystate(gMarioState)
+    update_mario_info_for_cam(gMarioState)
+    gMarioState.marioBodyState.punchState = 0
 
-            if ((0.0 <= ceilToFloorDist) && (ceilToFloorDist <= 150.0)) {
-                m.input |= INPUT_SQUISHED
-            }
-        }
+    gMarioState.marioObj.oPosX = gMarioState.pos[0]
+    gMarioState.marioObj.oPosY = gMarioState.pos[1]
+    gMarioState.marioObj.oPosZ = gMarioState.pos[2]
 
-        if (m.pos[1] > m.floorHeight + 100.0) {
-            m.input |= INPUT_OFF_FLOOR
-        }
+    gMarioState.marioObj.oMoveAnglePitch = gMarioState.faceAngle[0]
+    gMarioState.marioObj.oMoveAngleYaw   = gMarioState.faceAngle[1]
+    gMarioState.marioObj.oMoveAngleRoll  = gMarioState.faceAngle[2]
 
-        if (m.pos[1] < (m.waterLevel - 10)) {
-            m.input |= INPUT_IN_WATER
-        }
+    gMarioState.marioObj.gfx.pos = [...gMarioState.pos]
+    gMarioState.marioObj.gfx.angle = [0, gMarioState.faceAngle[1], 0]
 
-        if (m.pos[1] < (gasLevel - 100.0)) {
-            m.input |= INPUT_IN_POISON_GAS
-        }
+    // if (save_file_get_cap_pos(capPos)) {
+    //     capObject = spawn_object(gMarioState.marioObj, MODEL_MARIOS_CAP, bhvNormalCap);
 
-    } else {
-        level_trigger_warp(m, WARP_OP_DEATH)
-    }
+    //     capObject.oPosX = capPos[0]
+    //     capObject.oPosY = capPos[1]
+    //     capObject.oPosZ = capPos[2]
 
+    //     capObject.oForwardVelS32 = 0
+
+    //     capObject.oMoveAngleYaw = 0
+    // }
+
+    // LevelUpdate.gMarioState.marioObj.marioState = LevelUpdate.gMarioState
 }
 
-export const mario_floor_is_slippery = (m) => {
-    let normY
-
-    if ((m.area.terrainType & SurfaceTerrains.TERRAIN_MASK) == SurfaceTerrains.TERRAIN_SLIDE
-        && m.floor.normal.y < 0.9998477 //~cos(1 deg)
-    ) {
-        return true
-    }
-
-    switch (mario_get_floor_class(m)) {
-        case SurfaceTerrains.SURFACE_VERY_SLIPPERY:
-            normY = 0.9848077 //~cos(10 deg)
-            break
-
-        case SurfaceTerrains.SURFACE_SLIPPERY:
-            normY = 0.9396926 //~cos(20 deg)
-            break
-
-        default:
-            normY = 0.7880108 //~cos(38 deg)
-            break
-
-        case SurfaceTerrains.SURFACE_NOT_SLIPPERY:
-            normY = 0.0
-            break
-    }
-
-    if (m.floor) return m.floor.normal.y <= normY
-}
-
-export const mario_floor_is_slope = (m) => {
-    let normY
-
-    if ((m.area.terrainType & SurfaceTerrains.TERRAIN_MASK) == SurfaceTerrains.TERRAIN_SLIDE
-        && m.floor.normal.y < 0.9998477 //~cos(1 deg)
-    ) {
-        return true
-    }
-
-    switch (mario_get_floor_class(m)) {
-        case SurfaceTerrains.SURFACE_VERY_SLIPPERY:
-            normY = 0.9961947 //~cos(10 deg)
-            break
-
-        case SurfaceTerrains.SURFACE_SLIPPERY:
-            normY = 0.9848077 //~cos(20 deg)
-            break
-
-        default:
-            normY = 0.9659258 //~cos(38 deg)
-            break
-
-        case SurfaceTerrains.SURFACE_NOT_SLIPPERY:
-            normY = 0.9396926
-            break
-    }
-
-    if (m.floor) return m.floor.normal.y <= normY
-}
-
-export const mario_floor_is_steep = (m) => {
-    let normY
-
-    let result = false
-
-    if (!mario_facing_downhill(m, false)) {
-        switch (mario_get_floor_class(m)) {
-            case SurfaceTerrains.SURFACE_VERY_SLIPPERY:
-                normY = 0.9659258 //~cos(15 deg)
-                break
-
-            case SurfaceTerrains.SURFACE_SLIPPERY:
-                normY = 0.9396926 //~cos(20 deg)
-                break
-
-            default:
-                normY = 0.8660254 //~cos(30 deg)
-                break
-
-            case SurfaceTerrains.SURFACE_NOT_SLIPPERY:
-                normY = 0.8660254 //~cos(30 deg)
-                break
-        }
-
-        result = m.floor.normal.y <= normY
-
-    }
-
-    return result
-}
-
-/**************************************************
- *                     ACTIONS                    *
- **************************************************/
-
-/**
- * Sets Mario's other velocities from his forward speed.
- */
-export const mario_set_forward_vel = (m, forwardVel) => {
-    m.forwardVel = forwardVel
-
-    m.slideVelX = sins(m.faceAngle[1]) * m.forwardVel
-    m.slideVelZ = coss(m.faceAngle[1]) * m.forwardVel
-
-    m.vel[0] = m.slideVelX
-    m.vel[2] = m.slideVelZ
-}
-
-export const mario_get_floor_class = (m) => {
-    let floorClass
-
-    // The slide terrain type defaults to slide slipperiness.
-    // This doesn't matter too much since normally the slide terrain
-    // is checked for anyways.
-    if ((m.area.terrainType & SurfaceTerrains.TERRAIN_MASK) == SurfaceTerrains.TERRAIN_SLIDE) {
-        floorClass = SurfaceTerrains.SURFACE_CLASS_VERY_SLIPPERY
-    } else {
-        floorClass = SurfaceTerrains.SURFACE_CLASS_DEFAULT
-    }
-
-    if (m.floor) {
-        switch (m.floor.type) {
-            case SurfaceTerrains.SURFACE_NOT_SLIPPERY:
-            case SurfaceTerrains.SURFACE_HARD_NOT_SLIPPERY:
-            case SurfaceTerrains.SURFACE_SWITCH:
-                floorClass = SurfaceTerrains.SURFACE_CLASS_NOT_SLIPPERY
-                break
-
-            case SurfaceTerrains.SURFACE_SLIPPERY:
-            case SurfaceTerrains.SURFACE_NOISE_SLIPPERY:
-            case SurfaceTerrains.SURFACE_HARD_SLIPPERY:
-            case SurfaceTerrains.SURFACE_NO_CAM_COL_SLIPPERY:
-                floorClass = SurfaceTerrains.SURFACE_CLASS_SLIPPERY
-                break
-
-            case SurfaceTerrains.SURFACE_VERY_SLIPPERY:
-            case SurfaceTerrains.SURFACE_ICE:
-            case SurfaceTerrains.SURFACE_HARD_VERY_SLIPPERY:
-            case SurfaceTerrains.SURFACE_NOISE_VERY_SLIPPERY_73:
-            case SurfaceTerrains.SURFACE_NOISE_VERY_SLIPPERY_74:
-            case SurfaceTerrains.SURFACE_NOISE_VERY_SLIPPERY:
-            case SurfaceTerrains.SURFACE_NO_CAM_COL_VERY_SLIPPERY:
-                floorClass = SurfaceTerrains.SURFACE_CLASS_VERY_SLIPPERY
-                break
-        }
-    }
-
-    // Crawling allows Mario to not slide on certain steeper surfaces.
-    if (m.action == ACT_CRAWLING && m.floor.normal.y > 0.5 && floorClass == SurfaceTerrains.SURFACE_CLASS_DEFAULT) {
-        floorClass = SurfaceTerrains.SURFACE_CLASS_NOT_SLIPPERY
-    }
-
-    return floorClass
-}
-
-const sTerrainSounds = [
-    // default,              hard,                 slippery,
-    // very slippery,        noisy default,        noisy slippery
-    [ SOUND_TERRAIN_DEFAULT, SOUND_TERRAIN_STONE,  SOUND_TERRAIN_GRASS,
-      SOUND_TERRAIN_GRASS,   SOUND_TERRAIN_GRASS,  SOUND_TERRAIN_DEFAULT ], // TERRAIN_GRASS
-    [ SOUND_TERRAIN_STONE,   SOUND_TERRAIN_STONE,  SOUND_TERRAIN_STONE,
-      SOUND_TERRAIN_STONE,   SOUND_TERRAIN_GRASS,  SOUND_TERRAIN_GRASS ], // TERRAIN_STONE
-    [ SOUND_TERRAIN_SNOW,    SOUND_TERRAIN_ICE,    SOUND_TERRAIN_SNOW,
-      SOUND_TERRAIN_ICE,     SOUND_TERRAIN_STONE,  SOUND_TERRAIN_STONE ], // TERRAIN_SNOW
-    [ SOUND_TERRAIN_SAND,    SOUND_TERRAIN_STONE,  SOUND_TERRAIN_SAND,
-      SOUND_TERRAIN_SAND,    SOUND_TERRAIN_STONE,  SOUND_TERRAIN_STONE ], // TERRAIN_SAND
-    [ SOUND_TERRAIN_SPOOKY,  SOUND_TERRAIN_SPOOKY, SOUND_TERRAIN_SPOOKY,
-      SOUND_TERRAIN_SPOOKY,  SOUND_TERRAIN_STONE,  SOUND_TERRAIN_STONE ], // TERRAIN_SPOOKY
-    [ SOUND_TERRAIN_DEFAULT, SOUND_TERRAIN_STONE,  SOUND_TERRAIN_GRASS,
-      SOUND_TERRAIN_ICE,     SOUND_TERRAIN_STONE,  SOUND_TERRAIN_ICE ], // TERRAIN_WATER
-    [ SOUND_TERRAIN_STONE,   SOUND_TERRAIN_STONE,  SOUND_TERRAIN_STONE,
-      SOUND_TERRAIN_STONE,   SOUND_TERRAIN_ICE,    SOUND_TERRAIN_ICE ], // TERRAIN_SLIDE
-]
-
-/**
- * Computes a value that should be added to terrain sounds before playing them.
- * This depends on surfaces and terrain.
- */
-export const mario_get_terrain_sound_addend = (m) => {
-    let floorSoundType
-    let terrainType = m.area.terrainType & TERRAIN_MASK
-    let ret = SOUND_TERRAIN_DEFAULT << 16
-    let floorType
-
-    if (m.floor != null) {
-        floorType = m.floor.type
-
-        if ((Area.gCurrLevelNum != LEVEL_LLL) && (m.floorHeight < (m.waterLevel - 10))) {
-            // Water terrain sound, excluding LLL since it uses water in the volcano.
-            ret = SOUND_TERRAIN_WATER << 16
-        } else if (SURFACE_IS_QUICKSAND(floorType)) {
-            ret = SOUND_TERRAIN_SAND << 16
-        } else {
-            switch (floorType) {
-                default:
-                    floorSoundType = 0
-                    break
-
-                case SURFACE_NOT_SLIPPERY:
-                case SURFACE_HARD:
-                case SURFACE_HARD_NOT_SLIPPERY:
-                case SURFACE_SWITCH:
-                    floorSoundType = 1
-                    break
-
-                case SURFACE_SLIPPERY:
-                case SURFACE_HARD_SLIPPERY:
-                case SURFACE_NO_CAM_COL_SLIPPERY:
-                    floorSoundType = 2
-                    break
-
-                case SURFACE_VERY_SLIPPERY:
-                case SURFACE_ICE:
-                case SURFACE_HARD_VERY_SLIPPERY:
-                case SURFACE_NOISE_VERY_SLIPPERY_73:
-                case SURFACE_NOISE_VERY_SLIPPERY_74:
-                case SURFACE_NOISE_VERY_SLIPPERY:
-                case SURFACE_NO_CAM_COL_VERY_SLIPPERY:
-                    floorSoundType = 3
-                    break
-
-                case SURFACE_NOISE_DEFAULT:
-                    floorSoundType = 4
-                    break
-
-                case SURFACE_NOISE_SLIPPERY:
-                    floorSoundType = 5
-                    break
-            }
-
-            ret = sTerrainSounds[terrainType][floorSoundType] << 16
-        }
-    }
-
-    return ret
-}
-
-export const vec3_find_ceil = (pos, height, ceil) => {
-    return SurfaceCollision.find_ceil(pos[0], height + 80.0, pos[2], ceil)
-}
-
-export const mario_facing_downhill = (m, turnYaw) => {
-    let faceAngleYaw = m.faceAngle[1];
-
-    // This is never used in practice, as turnYaw is
-    // always passed as zero.
-    if (turnYaw && m.forwardVel < 0.0) {
-        faceAngleYaw = int16(faceAngleYaw + 0x8000);
-    }
-
-    faceAngleYaw = int16(m.floorAngle - faceAngleYaw);
-
-    return (-0x4000 < faceAngleYaw) && (faceAngleYaw < 0x4000);
-}
-
-export const find_floor_height_relative_polar = (m, angleFromMario, distFromMario) => {
-    const y = Math.sin(int16(m.faceAngle[1] + angleFromMario) / 0x8000 * Math.PI) * distFromMario
-    const x = Math.cos(int16(m.faceAngle[1] + angleFromMario) / 0x8000 * Math.PI) * distFromMario
-
-    return SurfaceCollision.find_floor(m.pos[0] + y, m.pos[1] + 100.0, m.pos[2] + x, {})
-}
-
-export const find_floor_slope = (m, yawOffset) => {
-    const floor = {};
-    let forwardFloorY, backwardFloorY
-    let forwardYDelta, backwardYDelta;
-    let result;
-
-    let x = Math.sin(int16(m.faceAngle[1] + yawOffset) / 0x8000 * Math.PI) * 5.0;
-    let z = Math.cos(int16(m.faceAngle[1] + yawOffset) / 0x8000 * Math.PI) * 5.0;
-
-    forwardFloorY = SurfaceCollision.find_floor(m.pos[0] + x, m.pos[1] + 100.0, m.pos[2] + z, floor);
-    backwardFloorY = SurfaceCollision.find_floor(m.pos[0] - x, m.pos[1] + 100.0, m.pos[2] - z, floor);
-
-    //! If Mario is near OOB, these floorY's can sometimes be -11000.
-    //  This will cause these to be off and give improper slopes.
-    forwardYDelta = forwardFloorY - m.pos[1];
-    backwardYDelta = m.pos[1] - backwardFloorY;
-
-    if (forwardYDelta * forwardYDelta < backwardYDelta * backwardYDelta) {
-        result = atan2s(5.0, forwardYDelta);
-    } else {
-        result = atan2s(5.0, backwardYDelta);
-    }
-
-    return result;
-}
-
-export const resolve_and_return_wall_collisions = (pos, offset, radius) => {
-    const collisionData = {
-        radius,
-        offsetY: offset,
-        x: pos[0], y: pos[1], z: pos[2],
-        walls: []
-    }
-
-    let wall
-
-    if (SurfaceCollision.find_wall_collisions(collisionData)) {
-        wall = collisionData.walls[collisionData.numWalls - 1]
-    }
-
-    pos[0] = collisionData.x
-    pos[1] = collisionData.y
-    pos[2] = collisionData.z
-
-    return wall
-}
-
-const update_mario_inputs = (m) => {
-    m.particleFlags = 0
-    m.input = 0
-    m.collidedObjInteractTypes = m.marioObj.collidedObjInteractTypes
-    m.flags &= 0xFFFFFF
-
-    update_mario_joystick_inputs(m, window.playerInput)
-    update_mario_button_inputs(m, window.playerInput)
-    update_mario_geometry_inputs(m)
-
-    if (Camera.gCameraMovementFlags & Camera.CAM_MOVE_C_UP_MODE) {
-        if (m.action & ACT_FLAG_ALLOW_FIRST_PERSON) {
-            m.input |= INPUT_FIRST_PERSON;
-        } else {
-            Camera.gCameraMovementFlags &= ~Camera.CAM_MOVE_C_UP_MODE;
-        }
-    }
-
-    if (!(m.input & (INPUT_NONZERO_ANALOG | INPUT_A_PRESSED))) {
-        m.input |= INPUT_UNKNOWN_5;
-    }
-
-    if (m.marioObj.rawData[oInteractStatus]
-        & (Interact.INT_STATUS_HOOT_GRABBED_BY_MARIO | Interact.INT_STATUS_MARIO_UNK1 | Interact.INT_STATUS_MARIO_UNK4)) {
-        m.input |= INPUT_STOMPED
-    }
-
-    if (m.wallKickTimer > 0) {
-        m.wallKickTimer--
-    }
-
-    if (m.doubleJumpTimer > 0) {
-        m.doubleJumpTimer--
-    }
-}
-
-const update_mario_info_for_cam = (m) => {
-    m.marioBodyState.action = m.action
-    m.statusForCamera.action = m.action
-
-    m.statusForCamera.faceAngle = [...m.faceAngle]
-
-    if ((m.flags & MARIO_UNKNOWN_25) == 0) {
-        m.statusForCamera.pos = [...m.pos]
-    }
-}
-
-const set_submerged_cam_preset_and_spawn_bubbles = (m) => {
-
-    if ((m.action & ACT_GROUP_MASK) == ACT_GROUP_SUBMERGED) {
-        const heightBelowWater = (m.waterLevel - 80) - m.pos[1]
-        const camPreset = m.area.camera.mode
-
-        if (m.action & ACT_FLAG_METAL_WATER) {
-            if (camPreset != CAMERA_MODE_CLOSE) {
-                Camera.set_camera_mode(m.area.camera, CAMERA_MODE_CLOSE, 1);
-            }
-        } else {
-            if ((heightBelowWater > 800) && (camPreset != CAMERA_MODE_BEHIND_MARIO)) {
-                Camera.set_camera_mode(m.area.camera, CAMERA_MODE_BEHIND_MARIO, 1)
-            }
-
-            if ((heightBelowWater < 400) && (camPreset != CAMERA_MODE_WATER_SURFACE)) {
-                Camera.set_camera_mode(m.area.camera, CAMERA_MODE_WATER_SURFACE, 1)
-            }
-
-            // As long as Mario isn't drowning or at the top
-            // of the water with his head out, spawn bubbles.
-            if ((m.action & ACT_FLAG_INTANGIBLE) == 0) {
-                if ((m.pos[1] < (m.waterLevel - 160)) || (m.faceAngle[0] < -0x800)) {
-                    m.particleFlags |= MarioConstants.PARTICLE_BUBBLE
-                }
-            }
-        }
-    }
-
+//...
+
+const read_next_anim_value = (curFrame, attribute, values) => {
+    const index = retrieve_animation_index(curFrame, attribute)
+    const value = values[index]
+    return value > 32767 ? value - 65536 : value
 }
 
 export const init_mario_from_save_file = () => {
@@ -2259,73 +2330,5 @@ export const init_mario_from_save_file = () => {
 
     LevelUpdate.gHudDisplay.coins = 0;
     LevelUpdate.gHudDisplay.wedges = 8;
-}
-
-export const transition_submerged_to_walking = m => {
-    Camera.set_camera_mode(m.area.camera, m.area.camera.defMode, 1)
-
-    m.angleVel = [0, 0, 0]
-
-    if (m.heldObj == null) {
-        return set_mario_action(m, ACT_WALKING, 0)
-    } else {
-        return set_mario_action(m, ACT_HOLD_WALKING, 0)
-    }
-}
-
-export const set_water_plunge_action = m => {
-    m.forwardVel = m.forwardVel / 4
-    m.vel[1] = m.vel[1] / 2
-
-    m.pos[1] = m.waterLevel - 100
-
-    m.faceAngle[2] = 0
-
-    vec3s_set(m.angleVel, 0, 0, 0)
-
-    if (!(m.action & ACT_FLAG_DIVING)) {
-        m.faceAngle[0] = 0
-    }
-
-    if (m.area.camera.mode != CAMERA_MODE_WATER_SURFACE) {
-        Camera.set_camera_mode(m.area.camera, CAMERA_MODE_WATER_SURFACE, 1)
-    }
-
-  return set_mario_action(m, ACT_WATER_PLUNGE, 0)
-}
-
-
-/**
- * These are the scaling values for the x and z axis for Mario
- * when he is close to unsquishing.
- */
-const sSquishScaleOverTime = [ 0x46, 0x32, 0x32, 0x3C, 0x46, 0x50, 0x50, 0x3C,
-                                0x28, 0x14, 0x14, 0x1E, 0x32, 0x3C, 0x3C, 0x28 ]
-
-/**
- * Applies the squish to Mario's model via scaling.
- */
-const squish_mario_model = (m) => {
-    if (m.squishTimer != 0xFF) {
-          // If no longer squished, scale back to default.
-        if (m.squishTimer == 0) {
-            vec3f_set(m.marioObj.gfx.scale, 1.0, 1.0, 1.0)
-        }
-          // If timer is less than 16, rubber-band Mario's size scale up and down.
-        else if (m.squishTimer <= 16) {
-            m.squishTimer -= 1
-
-            m.marioObj.gfx.scale[1] =
-                1.0 - ((sSquishScaleOverTime[15 - m.squishTimer] * 0.6) / 100.0)
-            m.marioObj.gfx.scale[0] =
-                ((sSquishScaleOverTime[15 - m.squishTimer] * 0.4) / 100.0) + 1.0
-
-            m.marioObj.gfx.scale[2] = m.marioObj.gfx.scale[0]
-        } else {
-            m.squishTimer -= 1
-
-            vec3f_set(m.marioObj.gfx.scale, 1.4, 0.4, 1.4)
-        }
-    }
 }
 

@@ -2,7 +2,7 @@
 import * as _Linker from "../../game/Linker"
 import { spawn_object, cur_obj_become_intangible, cur_obj_become_tangible, cur_obj_hide,
 cur_obj_unhide, obj_mark_for_deletion, cur_obj_scale, obj_turn_toward_object, approach_symmetric,
-cur_obj_move_using_fvel_and_gravity, cur_obj_was_attacked_or_ground_pounded, obj_set_hitbox } from "../ObjectHelpers"
+cur_obj_move_using_fvel_and_gravity, cur_obj_was_attacked_or_ground_pounded, obj_set_hitbox, cur_obj_set_model } from "../ObjectHelpers"
 import { s16, random_float, sins } from "../../utils"
 import { spawn_mist_particles_variable  } from "./white_puff.inc"
 import { spawn_triangle_break_particles } from "./break_particles.inc"
@@ -105,7 +105,7 @@ const exclamation_box_act_1 = () => {
     const o = gLinker.ObjectListProcessor.gCurrentObject
     cur_obj_become_intangible()
     if (o.rawData[oTimer] == 0) {
-        spawn_object(o, MODEL_EXCLAMATION_POINT, bhvRotatingExclamationMark)
+        spawn_object(o, MODEL_EXCLAMATION_POINT, gLinker.behaviors.bhvRotatingExclamationMark)
         cur_obj_set_model(MODEL_EXCLAMATION_BOX_OUTLINE)
     }
     if ((save_file_get_flags(DEBUG_HAVE) & cap_flags[o.rawData[oBehParams2ndByte]])

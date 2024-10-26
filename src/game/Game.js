@@ -4,6 +4,7 @@ import { LevelCommandsInstance as LevelCommands } from "../engine/LevelCommands"
 import { LevelUpdateInstance as LevelUpdate } from "../game/LevelUpdate"
 import { AreaInstance as Area } from "../game/Area"
 import * as Gbi from "../include/gbi"
+import { save_file_load_all } from "./SaveFile"
 
 const canvas = document.querySelector('#gameCanvas')
 
@@ -20,7 +21,7 @@ class Game {
     main_loop_init() {
         //setup_game_memory();
         //init_controllers();
-        //save_file_load_all();
+        save_file_load_all();
 
         // point levelCommandAddr to the entry point into the level script data.
         LevelCommands.start_new_script(level_script_entry)

@@ -98,7 +98,7 @@ export const mario_bonk_reflection = (m, negateSpeed) => {
     }
 
     if (negateSpeed) {
-        Mario.set_forward_vel(m, -m.forwardVel)
+        Mario.mario_set_forward_vel(m, -m.forwardVel)
     }
     else {
         m.faceAngle[1] = s16(m.faceAngle[1] + 0x8000)
@@ -123,7 +123,7 @@ export const mario_push_off_steep_floor = (m, action, actionArg) => {
 export const stop_and_set_height_to_floor = (m) => {
     const marioObj = m.marioObj
 
-    Mario.set_forward_vel(m, 0.0)
+    Mario.mario_set_forward_vel(m, 0.0)
     m.vel[1] = 0.0
 
     m.pos[1] = m.floorHeight
@@ -177,7 +177,7 @@ const perform_air_quarter_step = (m, intendedPos, stepArg) => {
     const floorWrapper = {}
     const floorHeight = SurfaceCollision.find_floor(nextPos[0], nextPos[1], nextPos[2], floorWrapper)
     const ceilWrapper = {}
-    const ceilHeight = Mario.vec3_find_ceil(nextPos, floorHeight, ceilWrapper)
+    const ceilHeight = Mario.vec3f_find_ceil(nextPos, floorHeight, ceilWrapper)
 
     const waterLevel = SurfaceCollision.find_water_level(nextPos[0], nextPos[2])
 
@@ -335,7 +335,7 @@ const perform_ground_quarter_step = (m, nextPos) => {
     const floorWrapper = {}
     const floorHeight = SurfaceCollision.find_floor(nextPos[0], nextPos[1], nextPos[2], floorWrapper)
     const ceilWrapper = {}
-    const ceilHeight = Mario.vec3_find_ceil(nextPos, floorHeight, ceilWrapper)
+    const ceilHeight = Mario.vec3f_find_ceil(nextPos, floorHeight, ceilWrapper)
 
     m.wall = upperWall
 
@@ -405,7 +405,7 @@ export const perform_ground_step = (m) => {
 
 export const stationary_ground_step = (m) => {
 
-    Mario.set_forward_vel(m, 0.0)
+    Mario.mario_set_forward_vel(m, 0.0)
 
     m.pos[1] = m.floorHeight
 

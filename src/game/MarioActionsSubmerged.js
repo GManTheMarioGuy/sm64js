@@ -335,7 +335,7 @@ const perform_water_full_step = (m, nextPos) => {
     const floorWrapper = {}
     const floorHeight = SurfaceCollisions.find_floor(nextPos[0], nextPos[1], nextPos[2], floorWrapper)
     const ceilWrapper = {}
-    let ceilHeight = Mario.vec3_find_ceil(nextPos, floorHeight, ceilWrapper)
+    let ceilHeight = Mario.vec3f_find_ceil(nextPos, floorHeight, ceilWrapper)
 
     if (floorWrapper.floor === null) {
         return Mario.WATER_STEP_CANCELLED

@@ -37,7 +37,7 @@ import { ACT_IDLE, ACT_PANTING, ACT_STANDING_AGAINST_WALL, ACT_CROUCHING, ACT_DI
          MARIO_CAP_IN_HAND, ACT_PUTTING_ON_CAP,
 
          drop_and_set_mario_action, resolve_and_return_wall_collisions, sBackwardKnockbackActions,
-         set_forward_vel, set_mario_action, sForwardKnockbackActions,
+         mario_set_forward_vel, set_mario_action, sForwardKnockbackActions,
 
          ACT_SHOCKED, ACT_WATER_SHOCKED, ACT_LAVA_BOOST, ACT_BURNING_JUMP, ACT_BURNING_FALL,
 
@@ -95,8 +95,11 @@ import { save_file_get_flags, SAVE_FLAG_UNLOCKED_UPSTAIRS_DOOR,
     SAVE_FLAG_CAP_ON_KLEPTO,
     SAVE_FLAG_CAP_ON_UKIKI,
     save_file_collect_star_or_key,
+    save_file_get_total_star_count,
 } from "./SaveFile"
 import { MODEL_NONE } from "../include/model_ids"
+import { AreaInstance as Area } from "./Area"
+import { COURSE_MAX, COURSE_MIN } from "../include/course_table"
 
 
 export const INTERACT_HOOT           /* 0x00000001 */ = (1 << 0)
@@ -324,9 +327,8 @@ const interact_star_or_key = (m, /*interactType,*/ o) => {
         starIndex = (o.oBehParams >> 24) & 0x1F;
         save_file_collect_star_or_key(m.numCoins, starIndex);
 
-        // m.numStars =
-        //     save_file_get_total_star_count(gCurrSaveFileNum - 1, COURSE_MIN - 1, COURSE_MAX - 1);
-        m.numStars++
+        m.numStars =
+            save_file_get_total_star_count(Area.gCurrSaveFileNum - 1, COURSE_MIN - 1, COURSE_MAX - 1);
 
         // if (!noExit) {
         //     drop_queued_background_music();
@@ -486,7 +488,7 @@ export const get_door_save_file_flag = (door) => {
 
 export const interact_door = (m, o) => {
     let /*s16*/ requiredNumStars = o.rawData[oBehParams] >> 24
-    let /*s16*/ numStars = 120  // save_file_get_total_star_count(gCurrSaveFileNum - 1, COURSE_MIN - 1, COURSE_MAX - 1)
+    let /*s16*/ numStars = save_file_get_total_star_count(Area.gCurrSaveFileNum - 1, COURSE_MIN - 1, COURSE_MAX - 1)
 
     if (m.action == ACT_WALKING || m.action == ACT_DECELERATING) {
         if (numStars >= requiredNumStars) {
@@ -1257,9 +1259,9 @@ const bounce_back_from_attack = (m, interaction) => {
         }
 
         if (m.action & ACT_FLAG_AIR) {
-            set_forward_vel(m, -16.0)
+            mario_set_forward_vel(m, -16.0)
         } else {
-            set_forward_vel(m, -48.0)
+            mario_set_forward_vel(m, -48.0)
         }
 
         Camera.set_camera_shake_from_hit(CAMERA.SHAKE_ATTACK)
@@ -1423,7 +1425,7 @@ const determine_knockback_action = (m) => {
     m.faceAngle[1] = angleToObject
 
     if (terrainIndex == 2) {
-        if (m.forwardVel < 28) set_forward_vel(m, 28)
+        if (m.forwardVel < 28) mario_set_forward_vel(m, 28)
 
         if (m.pos[1] >= m.interactObj.rawData[oPosY]) {
             if (m.vel[1] < 20.0) m.vel[1] = 20.0
@@ -1431,7 +1433,7 @@ const determine_knockback_action = (m) => {
             if (m.vel[1] > 0.0) m.vel[1] = 0.0
         }
     } else {
-        if (m.forwardVel < 16) set_forward_vel(m, 16)
+        if (m.forwardVel < 16) mario_set_forward_vel(m, 16)
     }
 
 
@@ -1515,11 +1517,11 @@ const check_kick_or_punch_wall = (m) => {
                     m.action = ACT_MOVE_PUNCHING;
                 }
 
-                set_forward_vel(m, -48.0);
+                mario_set_forward_vel(m, -48.0);
                 // play_sound(SOUND_ACTION_HIT_2, m.marioObj..gfx.cameraToObject);
                 m.particleFlags |= MarioConstants.PARTICLE_TRIANGLE;
             } else if (m.action & ACT_FLAG_AIR) {
-                set_forward_vel(m, -16.0);
+                mario_set_forward_vel(m, -16.0);
                 // play_sound(SOUND_ACTION_HIT_2, m.marioObj..gfx.cameraToObject);
                 m.particleFlags |= MarioConstants.PARTICLE_TRIANGLE;
             }

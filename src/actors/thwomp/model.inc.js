@@ -140,7 +140,7 @@ export const thwomp_seg5_dl_0500B570 = [
     gsSPVertex(thwomp_seg5_vertex_0500B4D0, 6, 0),
     gsSP2Triangles( 0,  1,  2, 0x0,  3,  4,  5, 0x0),
     gsSPEndDisplayList(),
-];
+].flat();
 
 // 0x0500B718 - 0x0500B750
 export const thwomp_seg5_dl_0500B718 = [
@@ -150,7 +150,7 @@ export const thwomp_seg5_dl_0500B718 = [
     gsSPVertex(thwomp_seg5_vertex_0500B530, 4, 0),
     gsSP2Triangles( 0,  1,  2, 0x0,  0,  2,  3, 0x0),
     gsSPEndDisplayList(),
-];
+].flat();
 
 // 0x0500B750 - 0x0500B7D0
 export const thwomp_seg5_dl_0500B750 = [
@@ -170,4 +170,4 @@ export const thwomp_seg5_dl_0500B750 = [
     gsDPPipeSync(),
     gsDPSetCombineMode(G_CC_SHADE, G_CC_SHADE),
     gsSPEndDisplayList(),
-];
+].flat();

@@ -1314,6 +1314,29 @@ export const WOODEN_POST_BP_NO_COINS_MASK = 0x0000FF00
     export const ENEMY_LAKITU_SUB_ACT_HOLD_SPINY  = 1
     export const ENEMY_LAKITU_SUB_ACT_THROW_SPINY = 2
 
+/* Coin Formation */
+    /* oAction */
+    export const COIN_FORMATION_ACT_SPAWN_COINS   = 0
+    export const COIN_FORMATION_ACT_IDLE          = 1
+    export const COIN_FORMATION_ACT_RESPAWN_COINS = 2
+
+    /* oBhvParams2ndByte */
+    export const COIN_FORMATION_BP_FLAG_HORIZONTAL = (0 << 0)
+    export const COIN_FORMATION_BP_FLAG_VERTICAL   = (1 << 0)
+    export const COIN_FORMATION_BP_FLAG_RING       = (1 << 1)
+    export const COIN_FORMATION_BP_FLAG_ARROW      = (1 << 2)
+    export const COIN_FORMATION_BP_FLAG_FLYING     = (1 << 4)
+    export const COIN_FORMATION_BP_FLAG_MASK       = (COIN_FORMATION_BP_FLAG_HORIZONTAL | 
+                                                      COIN_FORMATION_BP_FLAG_VERTICAL |
+                                                      COIN_FORMATION_BP_FLAG_RING |
+                                                      COIN_FORMATION_BP_FLAG_ARROW)
+
+    export const COIN_FORMATION_BP_LINE_HORIZONTAL = (COIN_FORMATION_BP_FLAG_HORIZONTAL)
+    export const COIN_FORMATION_BP_LINE_VERTICAL   = (COIN_FORMATION_BP_FLAG_VERTICAL)
+    export const COIN_FORMATION_BP_RING_HORIZONTAL = (COIN_FORMATION_BP_FLAG_HORIZONTAL | COIN_FORMATION_BP_FLAG_RING)
+    export const COIN_FORMATION_BP_RING_VERTICAL   = (COIN_FORMATION_BP_FLAG_VERTICAL | COIN_FORMATION_BP_FLAG_RING)
+    export const COIN_FORMATION_BP_ARROW           = (COIN_FORMATION_BP_FLAG_ARROW)
+
 /* Cloud */
     /* oAction */
     export const CLOUD_ACT_SPAWN_PARTS   = 0

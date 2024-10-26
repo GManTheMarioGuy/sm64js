@@ -15,12 +15,12 @@ import { SurfaceCollisionInstance as SurfaceCollision } from "../engine/SurfaceC
 import { atan2s, vec3f_set, sqrtf,vec3f_set_dist_and_angle } from "../engine/math_util"
 import * as MathUtil from "../engine/math_util"
 import * as Mario from "./Mario"
-import { oBehParams2ndByte, oHeldState, oMoveAnglePitch, oMoveAngleRoll, oMoveAngleYaw, oPosX, oPosY, oPosZ } from "../include/object_constants"
-import { CELL_HEIGHT_LIMIT, FLOOR_LOWER_LIMIT, SURFACE_DEATH_PLANE, SURFACE_IS_PAINTING_WARP, SURFACE_WALL_MISC } from "../include/surface_terrains"
+import { oBehParams2ndByte, oHeldState, oHomeX, oHomeY, oHomeZ, oMoveAnglePitch, oMoveAngleRoll, oMoveAngleYaw, oPosX, oPosY, oPosZ } from "../include/object_constants"
+import { CELL_HEIGHT_LIMIT, FLOOR_LOWER_LIMIT, SURFACE_DEATH_PLANE, SURFACE_IS_PAINTING_WARP, SURFACE_PAINTING_WARP_F9, SURFACE_PAINTING_WOBBLE_A6, SURFACE_WALL_MISC } from "../include/surface_terrains"
 import { sins, s16, int16, coss } from "../utils"
 import { HudInstance as Hud } from "./Hud"
 import { CAM_SELECTION_FIXED, CAM_SELECTION_MARIO, DIALOG_RESPONSE_NONE } from "./IngameMenu"
-import { DIALOG_001, DIALOG_020, DIALOG_NONE } from "../text/us/dialogs"
+import { DIALOG_001, DIALOG_010, DIALOG_020, DIALOG_NONE } from "../text/us/dialogs"
 import { gLastCompletedStarNum } from "./SaveFile"
 import { COURSE_MAX, COURSE_NONE } from "../levels/course_defines"
 import { level_defines } from "../levels/level_defines_constants"
@@ -61,6 +61,7 @@ import { MARIO_DIALOG_LOOK_FRONT } from "./MarioActionsCutscene"
 import { set_mario_npc_dialog } from "./MarioActionsCutscene"
 import { pitch } from "style-loader"
 import { DROP_TO_FLOOR } from "../engine/BehaviorCommands"
+import { gRipplingPainting } from "./Paintings"
 
 export const DEGREES = (d) => {return s16(d * 0x10000 / 360)}
 
@@ -737,8 +738,8 @@ class Camera {
             {area: 1, event: this.cam_castle_hmc_start_pool_cutscene.bind(this), centerX: 3350, centerY: -4689, centerZ: 4800, boundsX: 600, boundsY: 50, boundsZ: 600, boundsYaw: 0},
             {area: 1, event: this.cam_hmc_elevator_black_hole.bind(this), centerX: -3278, centerY: 1236, centerZ: 1379, boundsX: 358, boundsY: 200, boundsZ: 358, boundsYaw: 0},
             {area: 1, event: this.cam_hmc_elevator_maze_emergency_exit.bind(this), centerX: -2816, centerY: 2055, centerZ: -2560, boundsX: 358, boundsY: 200, boundsZ: 358, boundsYaw: 0},
-            {area: 1, event: this.cam_hmc_elevator_lake, centerX: -3532, centerY: 1543, centerZ: -7040, boundsX: 358, boundsY: 200, boundsZ: 358, boundsYaw: 0},
-            {area: 1, event: this.cam_hmc_elevator_maze, centerX: -972, centerY: 1543, centerZ: -7347, boundsX: 358, boundsY: 200, boundsZ: 358, boundsYaw: 0},
+            {area: 1, event: this.cam_hmc_elevator_lake.bind(this), centerX: -3532, centerY: 1543, centerZ: -7040, boundsX: 358, boundsY: 200, boundsZ: 358, boundsYaw: 0},
+            {area: 1, event: this.cam_hmc_elevator_maze.bind(this), centerX: -972, centerY: 1543, centerZ: -7347, boundsX: 358, boundsY: 200, boundsZ: 358, boundsYaw: 0},
             NULL_TRIGGER
         ]
 
@@ -1285,6 +1286,15 @@ class Camera {
             { shot: this.cutscene_star_spawn_end.bind(this), duration: 0 },
         ]
 
+        this.sCutsceneRedCoinStarSpawn = [
+            { shot: this.cutscene_red_coin_star.bind(this), duration: CUTSCENE_LOOP },
+            { shot: this.cutscene_red_coin_star_end.bind(this), duration: 15 },
+        ]
+
+        this.sCutsceneEnterPainting = [
+            { shot: this.cutscene_enter_painting.bind(this), duration: CUTSCENE_LOOP },
+        ]
+
         this.sCutsceneExitPaintingSuccess = [
             { shot: this.cutscene_exit_painting.bind(this), duration: 180 },
             { shot: this.cutscene_exit_painting_end.bind(this), duration: 0 }
@@ -1365,10 +1375,10 @@ class Camera {
             [ CUTSCENE_DOOR_WARP, this.sCutsceneDoorWarp ],
             [ CUTSCENE_DOOR_PULL, this.sCutsceneDoorPull ],
             [ CUTSCENE_DOOR_PUSH, this.sCutsceneDoorPush ],
-            // [ CUTSCENE_DOOR_PULL_MODE, this.sCutsceneDoorPullMode ],
-            // [ CUTSCENE_DOOR_PUSH_MODE, this.sCutsceneDoorPushMode ],
+            [ CUTSCENE_DOOR_PULL_MODE, this.sCutsceneDoorPullMode ],
+            [ CUTSCENE_DOOR_PUSH_MODE, this.sCutsceneDoorPushMode ],
             [ CUTSCENE_ENTER_CANNON, this.sCutsceneEnterCannon ],
-            // [ CUTSCENE_ENTER_PAINTING, this.sCutsceneEnterPainting ],
+            [ CUTSCENE_ENTER_PAINTING, this.sCutsceneEnterPainting ],
             // [ CUTSCENE_DEATH_EXIT, this.sCutsceneDeathExit ],
             [ CUTSCENE_EXIT_PAINTING_SUCC, this.sCutsceneExitPaintingSuccess ],
             // [ CUTSCENE_UNUSED_EXIT,  this.sCutsceneUnusedExit ],
@@ -7182,7 +7192,7 @@ class Camera {
     }
 
     cap_switch_save(dummy) {
-        // save_file_do_save(Area.gCurrSaveFileNum - 1)
+        window.saveGame();
     }
 
     init_spline_point(splineWrapper, index, speed, point) {
@@ -7420,15 +7430,6 @@ class Camera {
         }
         return curMode
     }
-
-    trigger_cutscene_dialog(trigger) {
-        let result = 0
-
-        if (trigger == 1) {
-            this.start_object_cutscene_without_focus(CUTSCENE_READ_MESSAGE)
-        }
-        return result
-    }
     
     
 
@@ -7512,6 +7513,84 @@ class Camera {
         this.sStatusFlags |= CAM_FLAG_SMOOTH_MOVEMENT
         this.gCutsceneTimer = CUTSCENE_STOP
         c.cutscene = 0
+    }
+
+    /**
+     * Start the red coin star spawning cutscene.
+     */
+    cutscene_red_coin_star_start(c) {
+        this.object_pos_to_vec3f(this.sCutsceneVars[1].point, this.gCutsceneFocus);
+        this.store_info_star(c);
+        this.sCutsceneVars[2].point[2] = this.sFOVState.fov;
+    }
+
+    cutscene_red_coin_star_focus_xz(c) {
+        const w = {current: c.focus[0]}
+        this.approach_f32_asymptotic_bool(w, this.gCutsceneFocus.rawData[oPosX], 0.15);
+        c.focus[0] = w.current; w.current = c.focus[2];
+        this.approach_f32_asymptotic_bool(w, this.gCutsceneFocus.rawData[oPosZ], 0.15);
+        c.focus[2] = w.current;
+    }
+
+    cutscene_red_coin_star_focus_y(c) {
+        const w = {current: c.focus[1]}
+        this.approach_f32_asymptotic_bool(w, this.gCutsceneFocus.rawData[oPosY], 0.1);
+        c.focus[1] = w.current;
+    }
+
+    cutscene_red_coin_star_look_up_at_star(c) {
+        c.focus[1] = this.sCutsceneVars[1].point[1] + this.gCutsceneFocus.rawData[oPosY] - this.sCutsceneVars[1].point[1] * 0.8;
+    }
+
+    cutscene_red_coin_star_warp(c) {
+        let posYaw, yaw
+        const o = this.gCutsceneFocus;
+
+        vec3f_set(this.sCutsceneVars[1].point, o.rawData[oHomeX], o.rawData[oHomeY], o.rawData[oHomeZ]);
+        vec3f_get_dist_and_angle(this.sCutsceneVars[1].point, c.pos, {})
+        posYaw = this.calculate_yaw(this.sCutsceneVars[1].point, c.pos);
+        yaw = this.calculate_yaw(this.sCutsceneVars[1].point, this.gPlayerCameraState.pos);
+
+        if (Math.abs(yaw - posYaw + DEGREES(90)) < Math.abs(yaw - posYaw - DEGREES(90))) {
+            yaw += DEGREES(90);
+        } else {
+            yaw -= DEGREES(90);
+        }
+
+        vec3f_set_dist_and_angle(this.sCutsceneVars[1].point, c.pos, 400.0, 0x1000, yaw)
+        this.sStatusFlags &= ~CAM_FLAG_SMOOTH_MOVEMENT
+    }
+
+    cutscene_red_coin_star_set_fov(c) {
+        this.sFOVState.fov = 60.0
+    }
+
+    cutscene_red_coin_star(c) {
+        this.sStatusFlags |= CAM_FLAG_SMOOTH_MOVEMENT
+        this.cutscene_red_coin_star_start = this.cutscene_red_coin_star_start.bind(this)
+        this.cutscene_red_coin_star_warp = this.cutscene_red_coin_star_warp.bind(this)
+        this.cutscene_red_coin_star_focus_xz = this.cutscene_red_coin_star_focus_xz.bind(this)
+        this.cutscene_red_coin_star_focus_y = this.cutscene_red_coin_star_focus_y.bind(this)
+        this.cutscene_red_coin_star_look_up_at_star = this.cutscene_red_coin_star_look_up_at_star.bind(this)
+        this.cutscene_red_coin_star_set_fov = this.cutscene_red_coin_star_set_fov.bind(this)
+
+        this.cutscene_event(this.cutscene_red_coin_star_start, c, 0, 0)
+        this.cutscene_event(this.cutscene_red_coin_star_warp, c, 0, 0)
+        this.cutscene_event(this.cutscene_red_coin_star_focus_xz, c, 0, 0)
+        this.cutscene_event(this.cutscene_red_coin_star_focus_y, c, 0, 0)
+        this.cutscene_event(this.cutscene_red_coin_star_look_up_at_star, c, 0, 0)
+        this.cutscene_event(this.cutscene_red_coin_star_set_fov, c, 0, 0)
+
+        if (this.gObjCutsceneDone) {
+            this.gCutsceneTimer = CUTSCENE_LOOP
+        }
+    }
+
+    cutscene_red_coin_star_end(c) {
+        this.retrieve_info_star(c)
+        this.gCutsceneTimer = CUTSCENE_STOP
+        c.cutscene = 0
+        this.sFOVState.fov = this.sCutsceneVars[2].point[2]
     }
 
     /**
@@ -7615,7 +7694,6 @@ class Camera {
         this.cutscene_event(this.cutscene_dialog_move_mario_shoulder, c, 0, -1)
         this.cutscene_event(this.cutscene_dialog_create_dialog_box, c, 10, 10)
     }
-
     /**
      * Sets the CAM_FLAG_UNUSED_CUTSCENE_ACTIVE flag, which does nothing.
      */
@@ -7654,7 +7732,7 @@ class Camera {
         switch (this.sCutsceneVars[0].angle[0]) {
             // Do nothing until message is gone.
             case 0:
-                if (IngameMenu.get_dialog_id() != DIALOG_NONE) {
+                if (IngameMenu.get_dialog_id() != DIALOG_NONE.id) {
                     this.sCutsceneVars[0].angle[0]++
                     set_time_stop_flags(TIME_STOP_ENABLED | TIME_STOP_DIALOG)
                 }
@@ -7666,7 +7744,7 @@ class Camera {
 
                 // This could cause softlocks. If a message starts one frame after another one closes, the
                 // cutscene will never end.
-                if (IngameMenu.get_dialog_id() == DIALOG_NONE) {
+                if (IngameMenu.get_dialog_id() == DIALOG_NONE.id) {
                     this.gCutsceneTimer = CUTSCENE_LOOP
                     this.retrieve_info_star(c)
                     this.transition_next_state(c, 15)
@@ -7874,7 +7952,7 @@ class Camera {
 
         if (IngameMenu.gDialogResponse != DIALOG_RESPONSE_NONE) this.sCutsceneVars[4].angle[0] = IngameMenu.gDialogResponse
 
-        if (IngameMenu.get_dialog_id() == DIALOG_NONE && this.sCutsceneVars[4].angle[0] != 0) {
+        if (IngameMenu.get_dialog_id() == DIALOG_NONE.id && this.sCutsceneVars[4].angle[0] != 0) {
             this.sCutsceneDialogResponse = this.sCutsceneVars[4].angle[0]
             if (this.sCutsceneVars[4].angle[0] == 1) this.cap_switch_save(this.gCutsceneFocus.rawData[oBehParams2ndByte])
             this.stop_cutscene_and_retrieve_stored_info(c)
@@ -7984,7 +8062,6 @@ class Camera {
     }
 
     cutscene_intro_peach_start_to_pipe_spline(c) {
-        console.log(this.gLakituState.pos)
         if (this.intro_peach_move_camera_start_to_pipe(c, sIntroPipeToDialogPosition, sIntroPipeToDialogFocus) != 0) {
             this.gCameraMovementFlags &= ~CAM_MOVE_C_UP_MODE;
             this.gCutsceneTimer = CUTSCENE_LOOP;
@@ -7995,7 +8072,7 @@ class Camera {
      * Loop the cutscene until Mario exits the dialog.
      */ 
     cutscene_intro_peach_dialog(c) {
-        if (IngameMenu.get_dialog_id() == DIALOG_NONE) {
+        if (IngameMenu.get_dialog_id() == DIALOG_NONE.id) {
             vec3f_copy(this.gLakituState.goalPos, c.pos)
             vec3f_copy(this.gLakituState.goalFocus, c.focus);
             this.sStatusFlags |= (CAM_FLAG_SMOOTH_MOVEMENT | CAM_FLAG_UNUSED_CUTSCENE_ACTIVE)
@@ -8106,7 +8183,7 @@ class Camera {
         this.cutscene_event(this.peach_letter_text, c, 65, 65)
         this.cutscene_event(this.play_sound_peach_reading_letter, c, 83, 83)
 
-        if (this.gCutsceneTimer > 120 /* && IngameMenu.get_dialog_id() == DIALOG_NONE */) this.gCutsceneTimer = CUTSCENE_LOOP
+        if (this.gCutsceneTimer > 120 && IngameMenu.get_dialog_id() == DIALOG_NONE.id) this.gCutsceneTimer = CUTSCENE_LOOP
 
         this.clamp_pitch(c.pos, c.focus, 0x3B00, -0x3B00)
     }
@@ -8325,13 +8402,60 @@ class Camera {
      * zooms in until the star select screen appears.
      */
     cutscene_enter_painting(c) {
-        let paintingAngle = []
-        this.set_fov_function(CAM_FOV_APP_20);
-        this.sStatusFlags |= CAM_FLAG_SMOOTH_MOVEMENT
+        let floor, highFloor;
+        let paintingPos = [0, 0, 0];
+        let focus = [0, 0, 0];
+        let focusOffset = [0, 0, 0];
+        let paintingAngle = [0, 0, 0];
+        let floorHeight;
+        let floorWrapper;
 
-        // if (gRipplingPainting != null) {
-        // }
-        c.mode = CAMERA_MODE_CLOSE
+        this.set_fov_function(CAM_FOV_APP_20);
+        this.sStatusFlags |= CAM_FLAG_SMOOTH_MOVEMENT;
+
+        if (gRipplingPainting != null) { 
+            paintingAngle[0] = 0;
+            paintingAngle[1] = (gRipplingPainting.rotation[1] / 360.0) * 65536.0;
+            paintingAngle[2] = 0;
+
+            focusOffset[0] = gRipplingPainting.size / 2;
+            focusOffset[1] = focusOffset[0];
+            focusOffset[2] = 0;
+
+            paintingPos[0] = gRipplingPainting.position[0];
+            paintingPos[1] = gRipplingPainting.position[1];
+            paintingPos[2] = gRipplingPainting.position[2];
+
+            this.offset_rotated(focus, paintingPos, focusOffset, paintingAngle);
+            this.approach_vec3f_asymptotic(c.focus, focus, 0.1, 0.1, 0.1);
+            focusOffset[2] = -(((gRipplingPainting.size * 1000.0) / 2) / 307.0);
+            this.offset_rotated(focus, paintingPos, focusOffset, paintingAngle);
+
+            floorWrapper.floor = floor;
+            floorHeight = SurfaceCollision.find_floor(focus[0], focus[1] + 10.0, focus[2], floor);
+            floor = floorWrapper.floor;
+
+            if (focus[1] < floorHeight) {
+                focus[1] = floorHeight;
+            }
+
+            if (c.cutscene == CUTSCENE_ENTER_PAINTING) {
+                this.approach_vec3f_asymptotic(c.pos, focus, 0.2, 0.1, 0.2);
+            } else {
+                this.approach_vec3f_asymptotic(c.pos, focus, 0.9, 0.9, 0.9);
+            }
+
+            floorWrapper.floor = floor;
+            SurfaceCollision.find_floor(c.pos[0], c.pos[1] + 10.0, c.pos[2], floorWrapper);
+            floor = floorWrapper.floor;
+
+            if ((floor.type < SURFACE_PAINTING_WOBBLE_A6) || (floor.type > SURFACE_PAINTING_WARP_F9)) {
+                c.cutscene = 0;
+                this.gCutsceneTimer = CUTSCENE_STOP;
+                this.sStatusFlags |= CAM_FLAG_SMOOTH_MOVEMENT;
+            }
+        }
+        c.mode = CAMERA_MODE_CLOSE;
     }
 
     /**

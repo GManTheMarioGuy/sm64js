@@ -4,7 +4,7 @@ const DEFINE_DIALOG = (id, unused, linesPerBox, leftOffset, width, str) => {
     return {id: id, str: str, linesPerBox: linesPerBox, leftOffset: leftOffset, width: width}
 }
 
-export const DIALOG_NONE = -1
+export const DIALOG_NONE = DEFINE_DIALOG(-1, 1, 0, 0, 0, 0);
 
 export const DIALOG_000 = DEFINE_DIALOG(0, 1, 6, 30, 200,
 [
@@ -490,10 +490,11 @@ Youre no slouch, but Im\n\
 a better sledder!\n\
 Better luck next time!"))
 
-export const DIALOG_038 = DEFINE_DIALOG(38, 1, 3, 95, 200, ("\
-Reacting to the Star\n\
-power, the door slowly\n\
-opens."))
+export const DIALOG_038 = DEFINE_DIALOG(38, 1, 3, 95, 200, [
+    0x1B,0x28,0x24,0x26,0x37,0x2C,0x31,0x2A,0x9E,0x37,0x32,0x9E,0xD1,0x9E,0x1C,0x37,0x24,0x35,0xFE,0x33,
+    0x32,0x3A,0x28,0x35,0x6F,0x9E,0xD1,0x9E,0x27,0x32,0x32,0x35,0x9E,0x36,0x2F,0x32,0x3A,0x2F,0x3C,0xFE,
+    0x32,0x33,0x28,0x31,0x36,0x3F,0xFF,
+])
 
 export const DIALOG_039 = DEFINE_DIALOG(39, 1, 4, 30, 200, ("\
 No visitors allowed,\n\

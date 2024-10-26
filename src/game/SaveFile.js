@@ -1,77 +1,8 @@
-import { vec3s_set } from "../engine/math_util";
-import { COURSE_BBH, COURSE_CCM, COURSE_NONE, COURSE_HMC, COURSE_SSL, COURSE_BOB, COURSE_SL, COURSE_WDW, COURSE_JRB, COURSE_THI, COURSE_TTC, COURSE_RR, COURSE_BITDW, COURSE_VCUTM, COURSE_BITFS, COURSE_SA, COURSE_BITS, COURSE_LLL, COURSE_DDD, COURSE_CAKE_END, COURSE_PSS, COURSE_COTMC, COURSE_TOTWC, COURSE_WMOTR, COURSE_TTM } from "../include/course_table";
-import { COURSE_MIN, COURSE_NUM_TO_INDEX, COURSE_STAGES_MAX } from "../levels/course_defines";
-import { AreaInstance as Area } from "./Area";
+import * as IDB from "idb-keyval"
+var msgpack = require("msgpack-lite")
 
-let NUM_SAVE_FILES = 4
-
-// struct SaveFile
-// {
-//     // Location of lost cap.
-//     // Note: the coordinates get set, but are never actually used, since the
-//     // cap can always be found in a fixed spot within the course
-//     u8 capLevel;
-//     u8 capArea;
-//     Vec3s capPos;
-
-//     u32 flags;
-
-//     // Star flags for each course.
-//     // The most significant bit of the byte *following* each course is set if the
-//     // cannon is open.
-//     u8 courseStars[COURSE_COUNT];
-
-//     u8 courseCoinScores[COURSE_STAGES_COUNT];
-
-//     struct SaveBlockSignature signature;
-// };
-
-// enum SaveFileIndex {
-//     SAVE_FILE_A,
-//     SAVE_FILE_B,
-//     SAVE_FILE_C,
-//     SAVE_FILE_D
-// };
-
-// struct MainMenuSaveData
-// {
-//     // Each save file has a 2 bit "age" for each course. The higher this value,
-//     // the older the high score is. This is used for tie-breaking when displaying
-//     // on the high score screen.
-//     u32 coinScoreAges[NUM_SAVE_FILES];
-//     u16 soundMode;
-
-// #ifdef VERSION_EU
-//     u16 language;
-// #define SUBTRAHEND 8
-// #else
-// #define SUBTRAHEND 6
-// #endif
-
-//     // Pad to match the EEPROM size of 0x200 (10 bytes on JP/US, 8 bytes on EU)
-//     u8 filler[EEPROM_SIZE / 2 - SUBTRAHEND - NUM_SAVE_FILES * (4 + sizeof(struct SaveFile))];
-
-//     struct SaveBlockSignature signature;
-// };
-
-// struct SaveBuffer
-// {
-//     // Each of the four save files has two copies. If one is bad, the other is used as a backup.
-//     struct SaveFile files[NUM_SAVE_FILES][2];
-//     // The main menu data has two copies. If one is bad, the other is used as a backup.
-//     struct MainMenuSaveData menuData[2];
-// };
-
-export let gLastCompletedCourseNum = null
-export let gLastCompletedStarNum = null
-export let sUnusedGotGlobalCoinHiScore = null
-export let gGotFileCoinHiScore = null
-export const gCurrCourseStarFlags = null
-export const gSpecialTripleJump = null
-export const gLevelToCourseNumTable = [
-    COURSE_NONE,
-    COURSE_NONE,
-    COURSE_NONE,
+import { vec3s_set } from "../engine/math_util"
+import {
     COURSE_BBH,
     COURSE_CCM,
     COURSE_NONE,
@@ -84,7 +15,6 @@ export const gLevelToCourseNumTable = [
     COURSE_THI,
     COURSE_TTC,
     COURSE_RR,
-    COURSE_NONE,
     COURSE_BITDW,
     COURSE_VCUTM,
     COURSE_BITFS,
@@ -92,66 +22,36 @@ export const gLevelToCourseNumTable = [
     COURSE_BITS,
     COURSE_LLL,
     COURSE_DDD,
-    COURSE_WDW,
     COURSE_CAKE_END,
-    COURSE_NONE,
     COURSE_PSS,
     COURSE_COTMC,
     COURSE_TOTWC,
-    COURSE_BITDW,
     COURSE_WMOTR,
-    COURSE_NONE,
-    COURSE_BITFS,
-    COURSE_BITS,
-    COURSE_NONE,
     COURSE_TTM,
-    COURSE_NONE,
-    COURSE_NONE
-]
+    COURSE_COUNT,
+} from "../include/course_table"
+import { COURSE_MIN, COURSE_NUM_TO_INDEX, COURSE_STAGES_COUNT, COURSE_STAGES_MAX } from "../levels/course_defines"
+import { LEVEL_BOWSER_1, LEVEL_BOWSER_2, LEVEL_BOWSER_3 } from "../levels/level_defines_constants"
+import { AreaInstance as Area } from "./Area"
+import { GameInstance as Game } from "./Game"
 
-// game progress flags
-export const SAVE_FLAG_FILE_EXISTS            /* 0x00000001 */ = (1 << 0)
-export const SAVE_FLAG_HAVE_WING_CAP          /* 0x00000002 */ = (1 << 1)
-export const SAVE_FLAG_HAVE_METAL_CAP         /* 0x00000004 */ = (1 << 2)
-export const SAVE_FLAG_HAVE_VANISH_CAP        /* 0x00000008 */ = (1 << 3)
-export const SAVE_FLAG_HAVE_KEY_1             /* 0x00000010 */ = (1 << 4)
-export const SAVE_FLAG_HAVE_KEY_2             /* 0x00000020 */ = (1 << 5)
-export const SAVE_FLAG_UNLOCKED_BASEMENT_DOOR /* 0x00000040 */ = (1 << 6)
-export const SAVE_FLAG_UNLOCKED_UPSTAIRS_DOOR /* 0x00000080 */ = (1 << 7)
-export const SAVE_FLAG_DDD_MOVED_BACK         /* 0x00000100 */ = (1 << 8)
-export const SAVE_FLAG_MOAT_DRAINED           /* 0x00000200 */ = (1 << 9)
-export const SAVE_FLAG_UNLOCKED_PSS_DOOR      /* 0x00000400 */ = (1 << 10)
-export const SAVE_FLAG_UNLOCKED_WF_DOOR       /* 0x00000800 */ = (1 << 11)
-export const SAVE_FLAG_UNLOCKED_CCM_DOOR      /* 0x00001000 */ = (1 << 12)
-export const SAVE_FLAG_UNLOCKED_JRB_DOOR      /* 0x00002000 */ = (1 << 13)
-export const SAVE_FLAG_UNLOCKED_BITDW_DOOR    /* 0x00004000 */ = (1 << 14)
-export const SAVE_FLAG_UNLOCKED_BITFS_DOOR    /* 0x00008000 */ = (1 << 15)
-export const SAVE_FLAG_CAP_ON_GROUND          /* 0x00010000 */ = (1 << 16)
-export const SAVE_FLAG_CAP_ON_KLEPTO          /* 0x00020000 */ = (1 << 17)
-export const SAVE_FLAG_CAP_ON_UKIKI           /* 0x00040000 */ = (1 << 18)
-export const SAVE_FLAG_CAP_ON_MR_BLIZZARD     /* 0x00080000 */ = (1 << 19)
-export const SAVE_FLAG_UNLOCKED_50_STAR_DOOR  /* 0x00100000 */ = (1 << 20)
-export const SAVE_FLAG_COLLECTED_TOAD_STAR_1  /* 0x01000000 */ = (1 << 24)
-export const SAVE_FLAG_COLLECTED_TOAD_STAR_2  /* 0x02000000 */ = (1 << 25)
-export const SAVE_FLAG_COLLECTED_TOAD_STAR_3  /* 0x04000000 */ = (1 << 26)
-export const SAVE_FLAG_COLLECTED_MIPS_STAR_1  /* 0x08000000 */ = (1 << 27)
-export const SAVE_FLAG_COLLECTED_MIPS_STAR_2  /* 0x10000000 */ = (1 << 28)
+const NUM_SAVE_FILES = 4
 
-// export const SAVE_FLAG_TO_STAR_FLAG(cmd) (((cmd) >> 24) & 0x7F)
-// export const STAR_FLAG_TO_SAVE_FLAG(cmd) ((cmd) << 24)
+const SAVE_FILE_A = 0;
+const SAVE_FILE_B = 1;
+const SAVE_FILE_C = 2;
+const SAVE_FILE_D = 3;
 
-// Variable for setting a warp checkpoint.
-
-// possibly a WarpDest struct where arg is a union. TODO: Check?
-// struct WarpCheckpoint {
-//     /*0x00*/ u8 actNum;
-//     /*0x01*/ u8 courseNum;
-//     0x02 u8 levelID;
-//     /*0x03*/ u8 areaNum;
-//     /*0x04*/ u8 warpNode;
-// };
-
-export let gWarpCheckpoint ={
+export let gLastCompletedCourseNum = COURSE_NONE
+export let gLastCompletedStarNum = 0
+export let sUnusedGotGlobalCoinHiScore = false
+export let gGotFileCoinHiScore = false
+export let gCurrCourseStarFlags = 0
+export let gMainMenuDataModified = false
+export let gSaveFileModified = false
+export let gSpecialTripleJump = false
+let gDummyFlags = 0
+export let gWarpCheckpoint = {
     actNum: 0,
     courseNum: 0,
     levelID: 0,
@@ -159,41 +59,242 @@ export let gWarpCheckpoint ={
     warpNode: 0,
 }
 
-export let gMainMenuDataModified = false
-export let gSaveFileModified = false
-let gDummyFlags = 0
+export const gSaveBuffer = {
+    files: new Array(NUM_SAVE_FILES).fill({
+        capLevel: 0,
+        capArea: 0,
+        capPos: [0, 0, 0],
+        flags: 0,
+        courseStars: new Array(COURSE_COUNT).fill(0),
+        courseCoinScores: new Array(COURSE_STAGES_COUNT).fill(0),
+    }),
+    menuData: {
+        soundMode: 0,
+        coinScoreAges: new Array(NUM_SAVE_FILES).fill(0),
+    }
+}
 
-// export const get_coin_score_age = (fileIndex, courseIndex) => {
-//     return (gSaveBuffer.menuData[0].coinScoreAges[fileIndex] >> (2 * courseIndex)) & 0x3;
-// }
+export const gLevelToCourseNumTable = [
+    COURSE_NONE,     COURSE_NONE,  COURSE_NONE,  COURSE_BBH,
+    COURSE_CCM,      COURSE_NONE,  COURSE_HMC,   COURSE_SSL,
+    COURSE_BOB,      COURSE_SL,    COURSE_WDW,   COURSE_JRB,
+    COURSE_THI,      COURSE_TTC,   COURSE_RR,    COURSE_NONE,
+    COURSE_BITDW,    COURSE_VCUTM, COURSE_BITFS, COURSE_SA,
+    COURSE_BITS,     COURSE_LLL,   COURSE_DDD,   COURSE_WDW,
+    COURSE_CAKE_END, COURSE_NONE,  COURSE_PSS,   COURSE_COTMC,
+    COURSE_TOTWC,    COURSE_BITDW, COURSE_WMOTR, COURSE_NONE,
+    COURSE_BITFS,    COURSE_BITS,  COURSE_NONE,  COURSE_TTM,
+    COURSE_NONE,     COURSE_NONE,
+]
+
+// game progress flags
+export const SAVE_FLAG_FILE_EXISTS /* 0x00000001 */ = 1 << 0
+export const SAVE_FLAG_HAVE_WING_CAP /* 0x00000002 */ = 1 << 1
+export const SAVE_FLAG_HAVE_METAL_CAP /* 0x00000004 */ = 1 << 2
+export const SAVE_FLAG_HAVE_VANISH_CAP /* 0x00000008 */ = 1 << 3
+export const SAVE_FLAG_HAVE_KEY_1 /* 0x00000010 */ = 1 << 4
+export const SAVE_FLAG_HAVE_KEY_2 /* 0x00000020 */ = 1 << 5
+export const SAVE_FLAG_UNLOCKED_BASEMENT_DOOR /* 0x00000040 */ = 1 << 6
+export const SAVE_FLAG_UNLOCKED_UPSTAIRS_DOOR /* 0x00000080 */ = 1 << 7
+export const SAVE_FLAG_DDD_MOVED_BACK /* 0x00000100 */ = 1 << 8
+export const SAVE_FLAG_MOAT_DRAINED /* 0x00000200 */ = 1 << 9
+export const SAVE_FLAG_UNLOCKED_PSS_DOOR /* 0x00000400 */ = 1 << 10
+export const SAVE_FLAG_UNLOCKED_WF_DOOR /* 0x00000800 */ = 1 << 11
+export const SAVE_FLAG_UNLOCKED_CCM_DOOR /* 0x00001000 */ = 1 << 12
+export const SAVE_FLAG_UNLOCKED_JRB_DOOR /* 0x00002000 */ = 1 << 13
+export const SAVE_FLAG_UNLOCKED_BITDW_DOOR /* 0x00004000 */ = 1 << 14
+export const SAVE_FLAG_UNLOCKED_BITFS_DOOR /* 0x00008000 */ = 1 << 15
+export const SAVE_FLAG_CAP_ON_GROUND /* 0x00010000 */ = 1 << 16
+export const SAVE_FLAG_CAP_ON_KLEPTO /* 0x00020000 */ = 1 << 17
+export const SAVE_FLAG_CAP_ON_UKIKI /* 0x00040000 */ = 1 << 18
+export const SAVE_FLAG_CAP_ON_MR_BLIZZARD /* 0x00080000 */ = 1 << 19
+export const SAVE_FLAG_UNLOCKED_50_STAR_DOOR /* 0x00100000 */ = 1 << 20
+export const SAVE_FLAG_COLLECTED_TOAD_STAR_1 /* 0x01000000 */ = 1 << 24
+export const SAVE_FLAG_COLLECTED_TOAD_STAR_2 /* 0x02000000 */ = 1 << 25
+export const SAVE_FLAG_COLLECTED_TOAD_STAR_3 /* 0x04000000 */ = 1 << 26
+export const SAVE_FLAG_COLLECTED_MIPS_STAR_1 /* 0x08000000 */ = 1 << 27
+export const SAVE_FLAG_COLLECTED_MIPS_STAR_2 /* 0x10000000 */ = 1 << 28
+
+// #define SAVE_FLAG_TO_STAR_FLAG(cmd) (((cmd) >> 24) & 0x7F)
+export const SAVE_FLAG_TO_STAR_FLAG = (cmd) => {
+    return (cmd >> 24) & 0x7f
+}
+// #define const STAR_FLAG_TO_SAVE_FLAG(cmd) ((cmd) << 24)
+export const STAR_FLAG_TO_SAVE_FLAG = (cmd) => {
+    return cmd << 24
+}
+
+const deep_copy = (obj) => {
+    return JSON.parse(JSON.stringify(obj))
+}
+
+const reset_save_buffer = () => {
+    gSaveBuffer.files = new Array(NUM_SAVE_FILES).fill({
+        capLevel: 0,
+        capArea: 0,
+        capPos: [0, 0, 0],
+        flags: 0,
+        courseStars: new Array(COURSE_COUNT).fill(0),
+        courseCoinScores: new Array(COURSE_STAGES_COUNT).fill(0),
+    })
+    gSaveBuffer.menuData = {
+        soundMode: 0,
+        coinScoreAges: new Array(NUM_SAVE_FILES).fill(0),
+    }
+}
+
+window.saveGame = () => {
+    if (gMainMenuDataModified) {
+        IDB.set("save_file", msgpack.encode(gSaveBuffer))
+        gMainMenuDataModified = false;
+    }
+
+    console.log("Saved Game:", gSaveBuffer)
+}
+
+window.loadGame = () => {
+    IDB.get("save_file").then((data) => {
+        if (data) {
+            gSaveBuffer = msgpack.decode(data)
+        } else {
+            reset_save_buffer();
+        }
+    })
+    
+    console.log("Loaded Game:", gSaveBuffer)
+}
+
+export const get_coin_score_age = (fileIndex, courseIndex) => {
+    return (gSaveBuffer.menuData.coinScoreAges[fileIndex] >> (2 * courseIndex)) & 0x3
+}
+
+export const set_coin_score_age = (fileIndex, courseIndex, age) => {
+    let mask = 0x3 << (2 * courseIndex)
+
+    gSaveBuffer.menuData.coinScoreAges[fileIndex] &= ~mask
+    gSaveBuffer.menuData.coinScoreAges[fileIndex] |= age << (2 * courseIndex)
+}
+
+/**
+ * Mark a coin score for a save file as the newest out of all save files.
+ */
+export const touch_coin_score_age = (fileIndex, courseIndex) => {
+    let currentAge = get_coin_score_age(fileIndex, courseIndex)
+
+    if (currentAge != 0) {
+        for (let i = 0; i < NUM_SAVE_FILES; i++) {
+            let age = get_coin_score_age(i, courseIndex)
+            if (age < currentAge) {
+                set_coin_score_age(i, courseIndex, age + 1)
+            }
+        }
+
+        set_coin_score_age(fileIndex, courseIndex, 0)
+        gMainMenuDataModified = true
+    }
+}
+
+/**
+ * Mark all coin scores for a save file as new.
+ */
+export const touch_high_score_ages = (fileIndex) => {
+    for (let i = COURSE_NUM_TO_INDEX(COURSE_MIN); i <= COURSE_NUM_TO_INDEX(COURSE_STAGES_MAX); i++) {
+        touch_coin_score_age(fileIndex, i)
+    }
+}
+
+// restore_save_file_data: use loadGame
+
+// save_file_do_save: use saveGame
+
+export const save_file_erase = (fileIndex) => {
+    touch_high_score_ages(fileIndex);
+    
+    gSaveBuffer.files[fileIndex] = {
+        capLevel: 0,
+        capArea: 0,
+        capPos: [0, 0, 0],
+        flags: 0,
+        courseStars: new Array(COURSE_COUNT).fill(0),
+        courseCoinScores: new Array(COURSE_STAGES_COUNT).fill(0),
+    }
+
+    gSaveFileModified = true;
+    window.saveGame();
+}
+
+export const save_file_copy = (srcFileIndex, destFileIndex) => {
+    touch_high_score_ages(destFileIndex);
+    gSaveBuffer.files[destFileIndex] = deep_copy(gSaveBuffer.files[srcFileIndex])
+
+    gSaveFileModified = true;
+    window.saveGame();
+}
+
+export const save_file_load_all = () => {
+    gMainMenuDataModified = false;
+    gSaveFileModified = false;
+
+    reset_save_buffer();
+    window.loadGame();
+}
+
+// save_file_reload: not required
 
 /**
  * Update the current save file after collecting a star or a key.
  * If coin score is greater than the current high score, update it.
  */
 export const save_file_collect_star_or_key = (coinScore, starIndex) => {
-    let fileIndex = Area.gCurrFileNum - 1
+    let fileIndex = Area.gCurrSaveFileNum - 1
     let courseIndex = COURSE_NUM_TO_INDEX(Area.gCurrCourseNum)
     let starFlag = 1 << starIndex
 
     gLastCompletedCourseNum = courseIndex + 1
     gLastCompletedStarNum = starIndex + 1
     gGotFileCoinHiScore = false
-    // sUnusedGotGlobalCoinHiScore = false;
+    sUnusedGotGlobalCoinHiScore = false;
 
     if (courseIndex >= COURSE_NUM_TO_INDEX(COURSE_MIN) && courseIndex <= COURSE_NUM_TO_INDEX(COURSE_STAGES_MAX)) {
-        /* if (coinScore > save_file_get_max_coin_score(courseIndex) & 0xFFFF) {
-            sUnusedGotGlobalCoinHiScore = true;
-        } */
+        if ((coinScore > save_file_get_max_coin_score(courseIndex)) & 0xffff) {
+            sUnusedGotGlobalCoinHiScore = true
+        }
 
         if (coinScore > save_file_get_max_coin_score(courseIndex)) {
-            // gSaveBuffer.files[fileIndex][0].courseCoinScores[courseIndex] = coinScore;
-            // touch_coin_score_age(fileIndex, courseIndex);
+            gSaveBuffer.files[fileIndex].courseCoinScores[courseIndex] = coinScore
+            touch_coin_score_age(fileIndex, courseIndex)
 
-            gGotFileCoinHiScore = true;
-            gSaveFileModified = true;
+            gGotFileCoinHiScore = true
+            gSaveFileModified = true
         }
     }
+
+    switch (Area.gCurrLevelNum) {
+        case LEVEL_BOWSER_1:
+            if (!(save_file_get_flags() & (SAVE_FLAG_HAVE_KEY_1 | SAVE_FLAG_UNLOCKED_BASEMENT_DOOR))) {
+                save_file_set_flags(SAVE_FLAG_HAVE_KEY_1)
+            }
+            break
+
+        case LEVEL_BOWSER_2:
+            if (!(save_file_get_flags() & (SAVE_FLAG_HAVE_KEY_2 | SAVE_FLAG_UNLOCKED_UPSTAIRS_DOOR))) {
+                save_file_set_flags(SAVE_FLAG_HAVE_KEY_2)
+            }
+            break
+
+        case LEVEL_BOWSER_3:
+            break
+
+        default:
+            if (!(save_file_get_star_flags(fileIndex, courseIndex) & starFlag)) {
+                save_file_set_star_flags(fileIndex, courseIndex, starFlag)
+            }
+            break
+    }
+}
+
+export const save_file_exists = (fileIndex) => {
+    return (gSaveBuffer.files[fileIndex].flags & SAVE_FLAG_FILE_EXISTS) != 0
 }
 
 export const save_file_get_max_coin_score = (courseIndex) => {
@@ -203,38 +304,16 @@ export const save_file_get_max_coin_score = (courseIndex) => {
 
     for (let fileIndex = 0; fileIndex < NUM_SAVE_FILES; fileIndex++) {
         if (save_file_get_star_flags(fileIndex, courseIndex) != 0) {
-            // let coinScore = save_file_get_course_coin_score(fileIndex, courseIndex);
-            // let scoreAge = get_coin_score_age(fileIndex, courseIndex);
-
-            // if (coinScore > maxCoinScore || (coinScore == maxCoinScore && scoreAge > maxScoreAge)) {
-            //     maxCoinScore = coinScore;
-            //     maxScoreAge = scoreAge;
-            //     maxScoreFileNum = fileIndex + 1;
+            let coinScore = save_file_get_course_coin_score(fileIndex, courseIndex)
+            let scoreAge = get_coin_score_age(fileIndex, courseIndex)
+            if (coinScore > maxCoinScore || (coinScore == maxCoinScore && scoreAge > maxScoreAge)) {
+                maxCoinScore = coinScore
+                maxScoreAge = scoreAge
+                maxScoreFileNum = fileIndex + 1
+            }
         }
     }
-}
-
-export const save_file_get_flags = (force) => {
-    if (force) {
-        return gDummyFlags | force
-    } else {
-        return gDummyFlags
-    }
-    // if (gCurrCreditsEntry != NULL || gCurrDemoInput != NULL) {
-    //     return false;
-    // }
-    // return gSaveBuffer.files[gCurrSaveFileNum - 1][0].flags;
-}
-
-export const save_file_set_flags = (flags) => {
-    gDummyFlags |= (flags | SAVE_FLAG_FILE_EXISTS)
-    gSaveFileModified = true
-}
-
-export const save_file_clear_flags = (flags) => {
-    gDummyFlags &= ~flags
-    gDummyFlags |= SAVE_FLAG_FILE_EXISTS
-    gSaveFileModified = true
+    return (maxScoreFileNum << 16) + Math.max(maxCoinScore, 0)
 }
 
 export const save_file_get_course_star_count = (fileIndex, courseIndex) => {
@@ -251,40 +330,143 @@ export const save_file_get_course_star_count = (fileIndex, courseIndex) => {
     return count
 }
 
+export const save_file_get_total_star_count = (fileIndex, minCourse, maxCourse) => {
+    let count = 0
+
+    // Get standard course star count.
+    for (; minCourse <= 14; minCourse++) {
+        count += save_file_get_course_star_count(fileIndex, minCourse)
+    }
+
+    // Add castle secret star count.
+    return save_file_get_course_star_count(fileIndex, COURSE_NUM_TO_INDEX(COURSE_NONE)) + count
+}
+
+export const save_file_set_flags = (flags) => {
+    gSaveBuffer.files[Area.gCurrSaveFileNum - 1].flags |= flags | SAVE_FLAG_FILE_EXISTS
+    gSaveFileModified = true
+}
+
+export const save_file_clear_flags = (flags) => {
+    gSaveBuffer.files[Area.gCurrSaveFileNum - 1].flags &= ~flags
+    gSaveBuffer.files[Area.gCurrSaveFileNum - 1].flags |= SAVE_FLAG_FILE_EXISTS
+    gSaveFileModified = true
+}
+
+export const save_file_get_flags = () => {
+    if (Area.gCurrCreditsEntry != null || Game.gCurrDemoInput != null) {
+        return false
+    }
+    return gSaveBuffer.files[Area.gCurrSaveFileNum - 1].flags
+}
+
 /**
  * Return the bitset of obtained stars in the specified course.
  * If course is -1, return the bitset of obtained castle secret stars.
  */
 export const save_file_get_star_flags = (fileIndex, courseIndex) => {
+    // does not work for some reason?
     let /*u32*/ starFlags
 
-    // if (courseIndex == -1) {
-    //     starFlags = SAVE_FLAG_TO_STAR_FLAG(gSaveBuffer.files[fileIndex][0].flags)
-    // } else {
-    //     starFlags = gSaveBuffer.files[fileIndex][0].courseStars[courseIndex] & 0x7F
-    // }
-    starFlags = 0x7F
+    if (courseIndex == -1) {
+        starFlags = SAVE_FLAG_TO_STAR_FLAG(gSaveBuffer.files[fileIndex].flags)
+    } else {
+        starFlags = gSaveBuffer.files[fileIndex].courseStars[courseIndex] & 0x7f
+    }
 
     return starFlags
 }
 
+/**
+ * Add to the bitset of obtained stars in the specified course.
+ * If course is COURSE_NONE, add to the bitset of obtained castle secret stars.
+ */
+export const save_file_set_star_flags = (fileIndex, courseIndex, starFlags) => {
+    if (courseIndex == COURSE_NUM_TO_INDEX(COURSE_NONE)) {
+        gSaveBuffer.files[fileIndex].flags |= STAR_FLAG_TO_SAVE_FLAG(starFlags)
+    } else {
+        gSaveBuffer.files[fileIndex].courseStars[courseIndex] |= starFlags
+    }
+
+    gSaveBuffer.files[fileIndex].flags |= SAVE_FLAG_FILE_EXISTS
+    gSaveFileModified = true
+}
+
 export const save_file_get_course_coin_score = (fileIndex, courseIndex) => {
-    return 0;
-    // return gSaveBuffer.files[fileIndex][0].courseCoinScores[courseIndex];
+    return gSaveBuffer.files[fileIndex].courseCoinScores[courseIndex]
+}
+
+/**
+ * Return TRUE if the cannon is unlocked in the current course.
+ */
+export const save_file_is_cannon_unlocked = () => {
+    return (gSaveBuffer.files[Area.gCurrSaveFileNum - 1].courseStars[Area.gCurrCourseNum] & (1 << 7)) != 0
+}
+
+/**
+ * Sets the cannon status to unlocked in the current course.
+ */
+export const save_file_set_cannon_unlocked = () => {
+    gSaveBuffer.files[Area.gCurrSaveFileNum - 1].courseStars[Area.gCurrCourseNum] |= 1 << 7
+    gSaveBuffer.files[Area.gCurrSaveFileNum - 1].flags |= SAVE_FLAG_FILE_EXISTS
+    gSaveFileModified = true
+}
+
+export const save_file_set_cap_pos = (x, y, z) => {
+    let saveFile = gSaveBuffer.files[Area.gCurrSaveFileNum - 1]
+
+    saveFile.capLevel = Area.gCurrLevelNum
+    saveFile.capArea = Area.gCurrAreaIndex
+    vec3s_set(saveFile.capPos, x, y, z)
+    save_file_set_flags(SAVE_FLAG_CAP_ON_GROUND)
+}
+
+export const save_file_get_cap_pos = (capPos) => {
+    let saveFile = gSaveBuffer.files[Area.gCurrSaveFileNum - 1]
+    let flags = save_file_get_flags()
+
+    if (
+        saveFile.capLevel == Area.gCurrLevelNum &&
+        saveFile.capArea == Area.gCurrAreaIndex &&
+        flags & SAVE_FLAG_CAP_ON_GROUND
+    ) {
+        capPos = [...saveFile.capPos]
+        return true
+    }
+    return false
+}
+
+export const save_file_set_sound_mode = (mode) => {
+    gSaveBuffer.menuData.soundMode = mode
+
+    gMainMenuDataModified = true
+    window.saveGame();
+}
+
+export const save_file_get_sound_mode = () => {
+    return gSaveBuffer.menuData.soundMode
+}
+
+export const save_file_move_cap_to_default_location = () => {
+    if (save_file_get_flags() & SAVE_FLAG_CAP_ON_GROUND) {
+        switch (gSaveBuffer.files[Area.gCurrSaveFileNum - 1].capLevel) {
+            case LEVEL_SSL:
+                save_file_set_flags(SAVE_FLAG_CAP_ON_KLEPTO)
+                break
+            case LEVEL_SL:
+                save_file_set_flags(SAVE_FLAG_CAP_ON_MR_BLIZZARD)
+                break
+            case LEVEL_TTM:
+                save_file_set_flags(SAVE_FLAG_CAP_ON_UKIKI)
+                break
+        }
+        save_file_clear_flags(SAVE_FLAG_CAP_ON_GROUND)
+    }
 }
 
 export const disable_warp_checkpoint = () => {
     // check_warp_checkpoint() checks to see if gWarpCheckpoint.courseNum != COURSE_NONE
-    gWarpCheckpoint.courseNum = COURSE_NONE;
-}
-
-export const save_file_set_cap_pos = (x, y, z) => {
-    // let saveFile = gSaveBuffer.files[gCurrSaveFileNum - 1][0];
-
-    // saveFile.capLeve = Area.gCurrLevelNum;
-    // saveFile.capArea = Area.gCurrAreaIndex;
-    // vec3s_set(saveFile.capPos, x, y, z);
-    save_file_set_flags(SAVE_FLAG_CAP_ON_GROUND);
+    gWarpCheckpoint.courseNum = COURSE_NONE
 }
 
 /**
@@ -296,7 +478,7 @@ export const check_if_should_set_warp_checkpoint = (warpNode) => {
         // Overwrite the warp checkpoint variables.
         gWarpCheckpoint.actNum = Area.gCurrActNum
         gWarpCheckpoint.courseNum = Area.gCurrCourseNum
-        gWarpCheckpoint.levelID = warpNode.destLevel & 0x7F
+        gWarpCheckpoint.levelID = warpNode.destLevel & 0x7f
         gWarpCheckpoint.areaNum = warpNode.destArea
         gWarpCheckpoint.warpNode = warpNode.destNode
     }
@@ -309,10 +491,14 @@ export const check_if_should_set_warp_checkpoint = (warpNode) => {
  */
 export const check_warp_checkpoint = (warpNode) => {
     let warpCheckpointActive = false
-    let currCourseNum = gLevelToCourseNumTable[(warpNode.destLevel & 0x7F) - 1]
-    
+    let currCourseNum = gLevelToCourseNumTable[(warpNode.destLevel & 0x7f) - 1]
+
     // gSavedCourseNum is only used in this function.
-    if (gWarpCheckpoint.courseNum != COURSE_NONE && Area.gSavedCourseNum == currCourseNum && gWarpCheckpoint.actNum == gCurrActNum) {
+    if (
+        gWarpCheckpoint.courseNum != COURSE_NONE &&
+        gLinker.Area.gSavedCourseNum == currCourseNum &&
+        gWarpCheckpoint.actNum == gCurrActNum
+    ) {
         warpNode.destLevel = gWarpCheckpoint.levelID
         warpNode.destArea = gWarpCheckpoint.areaNum
         warpNode.destNode = gWarpCheckpoint.warpNode

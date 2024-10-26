@@ -10,7 +10,7 @@ import {
 } from "../engine/math_util"
 
 import {
-    obj_scale, cur_obj_hide, obj_mark_for_deletion, spawn_object, obj_set_gfx_pos_from_pos, obj_update_pos_from_parent_transformation, create_transformation_from_matrices
+    obj_scale, cur_obj_hide, obj_mark_for_deletion, spawn_object, obj_set_gfx_pos_from_pos, obj_update_pos_from_parent_transformation, create_transformation_from_matrices, cur_obj_update_dialog_with_cutscene
 } from "./ObjectHelpers"
 
 import {
@@ -18,7 +18,15 @@ import {
 } from "../audio/external"
 
 import {
-    oMoveAngleYaw, oPosX, oPosY, oPosZ, oUnlockDoorStarState, oUnlockDoorStarTimer, oUnlockDoorStarYawVel
+    DIALOG_FLAG_TURN_TO_MARIO,
+    STAR_INDEX_ACT_1,
+    STAR_INDEX_ACT_2,
+    STAR_INDEX_ACT_3,
+    oBehParams,
+    oDistanceToMario,
+    oInteractStatus,
+    oInteractionSubtype,
+    oMoveAngleYaw, oOpacity, oPosX, oPosY, oPosZ, oToadMessageDialogId, oToadMessageRecentlyTalked, oToadMessageState, oUnlockDoorStarState, oUnlockDoorStarTimer, oUnlockDoorStarYawVel
 } from "../include/object_constants"
 
 import {
@@ -51,13 +59,36 @@ import {
 import {
     SOUND_MENU_STAR_SOUND, SOUND_GENERAL_SHORT_STAR
 } from "../include/sounds"
+import { INT_STATUS_INTERACTED, INT_SUBTYPE_NPC } from "./Interaction"
+import { MARIO_DIALOG_LOOK_DOWN } from "./MarioActionsCutscene"
+import { CUTSCENE_DIALOG } from "./Camera"
+import { DIALOG_076, DIALOG_082, DIALOG_083, DIALOG_154, DIALOG_155, DIALOG_156 } from "../text/us/dialogs"
+import { SAVE_FLAG_COLLECTED_TOAD_STAR_1, save_file_get_flags, save_file_get_total_star_count } from "./SaveFile"
+import { AreaInstance as Area } from "./Area"
+import { COURSE_MAX, COURSE_MIN } from "../levels/course_defines"
+
+const TOAD_STAR_1_REQUIREMENT = 12
+const TOAD_STAR_2_REQUIREMENT = 25
+const TOAD_STAR_3_REQUIREMENT = 35
+
+const TOAD_STAR_1_DIALOG = DIALOG_082.str
+const TOAD_STAR_2_DIALOG = DIALOG_076.str
+const TOAD_STAR_3_DIALOG = DIALOG_083.str
+
+const TOAD_STAR_1_DIALOG_AFTER = DIALOG_154.str
+const TOAD_STAR_2_DIALOG_AFTER = DIALOG_155.str
+const TOAD_STAR_3_DIALOG_AFTER = DIALOG_156.str
+
+const TOAD_MESSAGE_FADED = 0
+const TOAD_MESSAGE_OPAQUE = 1
+const TOAD_MESSAGE_OPACIFYING = 2
+const TOAD_MESSAGE_FADING = 3
+const TOAD_MESSAGE_TALKING = 4
 
 const UNLOCK_DOOR_STAR_RISING = 0
 const UNLOCK_DOOR_STAR_WAITING = 1
 const UNLOCK_DOOR_STAR_SPAWNING_PARTICLES = 2
 const UNLOCK_DOOR_STAR_DONE = 3
-
-
 
 class MarioMisc {
     constructor() {
@@ -97,6 +128,136 @@ class MarioMisc {
             Game.D_8032C6A0_classObject = GoddardRenderer
         }
         return gfx 
+    }
+
+    toad_message_faded() {
+        const o = gLinker.ObjectListProcessor.gCurrentObject;
+
+        if (o.rawData[oDistanceToMario] > 700.0) o.rawData[oToadMessageRecentlyTalked] = false;
+
+        if (!o.rawData[oToadMessageRecentlyTalked] && o.rawData[oDistanceToMario] < 600.0)
+            o.rawData[oToadMessageState] = TOAD_MESSAGE_OPACIFYING;
+    }
+
+    toad_message_opaque() {
+        const o = gLinker.ObjectListProcessor.gCurrentObject;
+
+        if (o.rawData[oDistanceToMario] > 700.0) o.rawData[oToadMessageRecentlyTalked] = false;
+        else if (!o.rawData[oToadMessageRecentlyTalked]) {
+            o.rawData[oInteractionSubtype] = INT_SUBTYPE_NPC;
+            if (o.rawData[oInteractStatus] & INT_STATUS_INTERACTED) {
+                o.rawData[oInteractStatus] = 0;
+                o.rawData[oToadMessageState] = TOAD_MESSAGE_TALKING;
+                // play_toads_jingle();
+            }
+        }
+    }
+
+    toad_message_talking() {
+        const o = gLinker.ObjectListProcessor.gCurrentObject;
+
+        if (cur_obj_update_dialog_with_cutscene(MARIO_DIALOG_LOOK_DOWN,
+                                                DIALOG_FLAG_TURN_TO_MARIO,
+                                                CUTSCENE_DIALOG,
+                                                o.rawData[oToadMessageDialogId])
+        ) {
+            o.rawData[oToadMessageRecentlyTalked] = true;
+            o.rawData[oToadMessageState] = TOAD_MESSAGE_FADING;
+
+            switch (o.rawData[oToadMessageDialogId]) {
+                case TOAD_STAR_1_DIALOG:
+                    o.rawData[oToadMessageDialogId] = TOAD_STAR_1_DIALOG_AFTER;
+                    gLinker.bhv_spawn_star_no_level_exit(STAR_INDEX_ACT_1);
+                    break
+
+                case TOAD_STAR_2_DIALOG:
+                    o.rawData[oToadMessageDialogId] = TOAD_STAR_2_DIALOG_AFTER;
+                    gLinker.bhv_spawn_star_no_level_exit(STAR_INDEX_ACT_2);
+                    break
+
+                case TOAD_STAR_3_DIALOG:
+                    o.rawData[oToadMessageDialogId] = TOAD_STAR_3_DIALOG_AFTER;
+                    gLinker.bhv_spawn_star_no_level_exit(STAR_INDEX_ACT_3);
+                    break
+            }
+        }
+    }
+
+    toad_message_opacifying() {
+        const o = gLinker.ObjectListProcessor.gCurrentObject;
+
+        o.rawData[oOpacity] += 6
+        if (o.rawData[oOpacity] == 255) o.rawData[oToadMessageState] = TOAD_MESSAGE_OPAQUE;
+    }
+
+    toad_message_fading() {
+        const o = gLinker.ObjectListProcessor.gCurrentObject;
+
+        o.rawData[oOpacity] -= 6
+        if (o.rawData[oOpacity] == 81) o.rawData[oToadMessageState] = TOAD_MESSAGE_FADED;
+    }
+
+    bhv_toad_message_loop() {
+        const o = gLinker.ObjectListProcessor.gCurrentObject;
+
+        if (o.gfx.flags & GRAPH_RENDER_ACTIVE) {
+            o.rawData[oInteractionSubtype] = 0;
+
+            switch (o.rawData[oToadMessageState]) {
+                case TOAD_MESSAGE_FADED:
+                    this.toad_message_faded();
+                    break;
+
+                case TOAD_MESSAGE_OPAQUE:
+                    this.toad_message_opaque();
+                    break;
+
+                case TOAD_MESSAGE_OPACIFYING:
+                    this.toad_message_opacifying();
+                    break;
+                    
+                case TOAD_MESSAGE_FADING:
+                    this.toad_message_fading();
+                    break;
+                    
+                case TOAD_MESSAGE_TALKING:
+                    this.toad_message_talking();
+                    break;
+            }
+        }
+    }
+
+    bhv_toad_message_init() {
+        const o = gLinker.ObjectListProcessor.gCurrentObject;
+
+        let saveFlags = save_file_get_flags();
+        let starCount = save_file_get_total_star_count(Area.gCurrSaveFileNum - 1, COURSE_MIN - 1, COURSE_MAX - 1);
+        let dialogID = (o.rawData[oBehParams] >> 24) & 0xFF;
+        let enoughStars = true;
+
+        switch (dialogID) {
+            case TOAD_STAR_1_DIALOG:
+                enoughStars = starCount >= TOAD_STAR_1_REQUIREMENT;
+                if (saveFlags & SAVE_FLAG_COLLECTED_TOAD_STAR_1) dialogID = TOAD_STAR_1_DIALOG_AFTER;
+                break;
+
+            case TOAD_STAR_2_DIALOG:
+                enoughStars = starCount >= TOAD_STAR_2_REQUIREMENT;
+                if (saveFlags & SAVE_FLAG_COLLECTED_TOAD_STAR_1) dialogID = TOAD_STAR_2_DIALOG_AFTER;
+                break;
+
+            case TOAD_STAR_3_DIALOG:
+                enoughStars = starCount >= TOAD_STAR_3_REQUIREMENT;
+                if (saveFlags & SAVE_FLAG_COLLECTED_TOAD_STAR_1) dialogID = TOAD_STAR_3_DIALOG_AFTER;
+                break;
+        }
+
+        if (enoughStars) {
+            o.rawData[oToadMessageDialogId] = dialogID;
+            o.rawData[oToadMessageRecentlyTalked] = false;
+            o.rawData[oToadMessageState] = TOAD_MESSAGE_FADED;
+            o.rawData[oOpacity] = 81;
+        } else obj_mark_for_deletion(o);
     }
 
     geo_mario_tilt_torso(callContext, node) {

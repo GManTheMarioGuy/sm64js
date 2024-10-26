@@ -1,7 +1,7 @@
-import { MODEL_STAR } from "../../include/model_ids"
+import { MODEL_SPARKLES, MODEL_STAR } from "../../include/model_ids"
 import { ACTIVE_FLAG_DEACTIVATED, CELEB_STAR_ACT_FACE_CAMERA, CELEB_STAR_ACT_SPIN_AROUND_MARIO, oAction, oCelebStarDiameterOfRotation, oFaceAnglePitch, oFaceAngleRoll, oFaceAngleYaw, oHomeX, oHomeZ, oMoveAngleYaw, oPosX, oPosY, oPosZ, oTimer } from "../../include/object_constants"
 import { coss, sins } from "../../utils"
-import { cur_obj_scale } from "../ObjectHelpers"
+import { cur_obj_scale, spawn_object } from "../ObjectHelpers"
 import { spawn_mist_particles_variable } from "./white_puff.inc"
 
 export const bhv_celebration_star_init = () => {
@@ -36,7 +36,7 @@ const celeb_star_act_spin_around_mario = () => {
     }
 
     if (o.rawData[oTimer] < 35) {
-        // spawn_object(o, MODEL_SPARKLES, bhvCelebrationStarSparkle)
+        spawn_object(o, MODEL_SPARKLES, gLinker.behaviors.bhvCelebrationStarSparkle)
         o.rawData[oCelebStarDiameterOfRotation]++
     } else {
         o.rawData[oCelebStarDiameterOfRotation] -= 20

@@ -32,8 +32,7 @@ import { ccm_seg7_dl_0700DDF0 } from "./5/model.inc"
 import {
     geo_movtex_pause_control, geo_movtex_draw_water_regions
 } from "../../../../game/MovingTexture"
-
-//import { geo_cannon_circle_base } from "../../../../game/ObjectHelpers"
+import { geo_cannon_circle_base } from "../../../../game/ScreenTransition"
 
 
 // 0x0E00051C
@@ -66,9 +65,9 @@ export const ccm_geo_00051C = () => {return [
             GEO_CLOSE_NODE(),
         GEO_CLOSE_NODE(),
         GEO_ZBUFFER(0),
-        /*GEO_OPEN_NODE(),
+        GEO_OPEN_NODE(),
             GEO_ASM(0, geo_cannon_circle_base),
-        GEO_CLOSE_NODE(),*/
+        GEO_CLOSE_NODE(),
     GEO_CLOSE_NODE(),
     GEO_END(),
 ]};
