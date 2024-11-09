@@ -4,6 +4,7 @@ var msgpack = require("msgpack-lite")
 import { vec3s_set } from "../engine/math_util"
 import {
     COURSE_BBH,
+    COURSE_WF,
     COURSE_CCM,
     COURSE_NONE,
     COURSE_HMC,
@@ -80,7 +81,7 @@ export const gLevelToCourseNumTable = [
     COURSE_BOB,      COURSE_SL,    COURSE_WDW,   COURSE_JRB,
     COURSE_THI,      COURSE_TTC,   COURSE_RR,    COURSE_NONE,
     COURSE_BITDW,    COURSE_VCUTM, COURSE_BITFS, COURSE_SA,
-    COURSE_BITS,     COURSE_LLL,   COURSE_DDD,   COURSE_WDW,
+    COURSE_BITS,     COURSE_LLL,   COURSE_DDD,   COURSE_WF,
     COURSE_CAKE_END, COURSE_NONE,  COURSE_PSS,   COURSE_COTMC,
     COURSE_TOTWC,    COURSE_BITDW, COURSE_WMOTR, COURSE_NONE,
     COURSE_BITFS,    COURSE_BITS,  COURSE_NONE,  COURSE_TTM,
@@ -234,7 +235,6 @@ export const save_file_copy = (srcFileIndex, destFileIndex) => {
 export const save_file_load_all = () => {
     gMainMenuDataModified = false;
     gSaveFileModified = false;
-
     reset_save_buffer();
     window.loadGame();
 }
@@ -371,7 +371,7 @@ export const save_file_get_star_flags = (fileIndex, courseIndex) => {
     if (courseIndex == -1) {
         starFlags = SAVE_FLAG_TO_STAR_FLAG(gSaveBuffer.files[fileIndex].flags)
     } else {
-        starFlags = gSaveBuffer.files[fileIndex].courseStars[courseIndex] & 0x7f
+        starFlags = gSaveBuffer.files[fileIndex].courseStars[courseIndex]
     }
 
     return starFlags
@@ -509,4 +509,8 @@ export const check_warp_checkpoint = (warpNode) => {
     }
 
     return warpCheckpointActive
+}
+
+export const set_curr_course_star_flags = () => {
+    gCurrCourseStarFlags = save_file_get_star_flags(Area.gCurrSaveFileNum - 1, Area.gCurrCourseNum - 1);
 }

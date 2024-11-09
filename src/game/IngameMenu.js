@@ -991,7 +991,7 @@ class IngameMenu {
                     gLinker.LevelUpdate.level_set_transition(0, null);
                     play_sound(SOUND_MENU_MESSAGE_DISAPPEAR, Game.gGlobalSoundSource);
 
-                    if (this.gDialogBoxType == DIALOG_TYPE_ZOOM) trigger_cutscene_dialog(2);
+                    if (this.gDialogBoxType == DIALOG_TYPE_ZOOM) Camera.trigger_cutscene_dialog(2);
 
                     this.gDialogResponse = this.gMenuLineNum;
                 }
@@ -1735,7 +1735,7 @@ class IngameMenu {
                 return index;
             }
 
-            // this.render_dialog_entries();
+            this.render_dialog_entries();
             this.gMenuTextColorTransTimer = this.gMenuTextColorTransTimer + 0x1000;
         }
 
